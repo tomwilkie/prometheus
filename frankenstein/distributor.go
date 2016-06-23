@@ -16,6 +16,7 @@ package frankenstein
 import (
 	"sync"
 
+	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
 
 	"github.com/prometheus/prometheus/storage"
@@ -56,11 +57,12 @@ func NewDistributor(cfg DistributorConfig) (*Distributor, error) {
 		return nil, err
 	}
 	d := &Distributor{
-		consul: consul,
-		ring:   NewRing(),
-		cfg:    cfg,
-		quit:   make(chan struct{}),
-		done:   make(chan struct{}),
+		consul:  consul,
+		ring:    NewRing(),
+		cfg:     cfg,
+		clients: map[string]storage.SampleAppender{},
+		quit:    make(chan struct{}),
+		done:    make(chan struct{}),
 	}
 	go d.loop()
 	return d, nil
@@ -76,6 +78,7 @@ func (d *Distributor) loop() {
 	defer close(d.done)
 	d.consul.WatchPrefix(d.cfg.ConsulPrefix, &Collector{}, d.quit, func(key string, value interface{}) bool {
 		c := *value.(*Collector)
+		log.Infof("Got update to collector: %#v", c)
 		d.ring.Update(c)
 		return true
 	})

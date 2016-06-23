@@ -5,20 +5,20 @@ Design Doc: https://docs.google.com/document/d/1C7yhMnb1x2sfeoe45f4mnnKConvroWhJ
     # Build frankenstein
     make frank
 
-    # First start Consul:
+    # Start Consul:
     consul agent -ui -data-dir=consul/ -server -advertise=127.0.0.1 -bootstrap
 
-    # Then start frank distributor:
+    # Start frank distributor:
     ./frank -web.listen-address=:9094
 
-    # Then start a receiver:
+    # Start a ingestor
     ./prometheus -config.file=empty.yml
 
     # Add a token into consul for it:
     curl  -X PUT -d '{"hostname": "localhost:9091", "tokens": [0]}' http://localhost:8500/v1/kv/collectors/localhost
 
-    # Retrieval:
-    ./prometheus -web.listen-address=:9091 -retrieval-only -storage.remote.generic-url=http://localhost:9090/push
+    # Start retrieval scraping the ingestor, push to distributor
+    ./prometheus -config.file=frankenstein/retrieval.yml -web.listen-address=:9091 -retrieval-only -storage.remote.generic-url=http://localhost:9094/push
 
 ## Retrieval
 

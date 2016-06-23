@@ -70,7 +70,7 @@ promu:
 	GOARCH=$(subst x86_64,amd64,$(patsubst i%86,386,$(shell uname -m))) \
 	$(GO) get -u github.com/prometheus/promu
 
-frank:  $(find frankenstein/ -name "*.go")
+frank:  $(shell find frankenstein -name "*.go")
 	go build -o $@ ./frankenstein/cmd/frankenstein
 
 .PHONY: all style check_license format build test vet assets tarball docker promu

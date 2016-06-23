@@ -15,7 +15,7 @@ Design Doc: https://docs.google.com/document/d/1C7yhMnb1x2sfeoe45f4mnnKConvroWhJ
     ./prometheus -config.file=empty.yml
 
     # Add a token into consul for it:
-    curl  -X PUT -d '{"hostname": "localhost:9091", "tokens": [0]}' http://localhost:8500/v1/kv/collectors/localhost
+    curl  -X PUT -d '{"hostname": "http://localhost:9091/push", "tokens": [0]}' http://localhost:8500/v1/kv/collectors/localhost
 
     # Start retrieval scraping the ingestor, push to distributor
     ./prometheus -config.file=frankenstein/retrieval.yml -web.listen-address=:9091 -retrieval-only -storage.remote.generic-url=http://localhost:9094/push

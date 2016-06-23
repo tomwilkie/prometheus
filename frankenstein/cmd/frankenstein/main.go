@@ -39,10 +39,12 @@ func main() {
 	flag.DurationVar(&remoteTimeout, "remote.timeout", 100*time.Millisecond, "Timeout for upstream collectors.")
 
 	clientFactory := func(hostname string) (storage.SampleAppender, error) {
-		return remote.New(&remote.Options{
+		storage := remote.New(&remote.Options{
 			GenericURL:     hostname,
 			StorageTimeout: remoteTimeout,
-		}), nil
+		})
+		storage.Run()
+		return storage, nil
 	}
 
 	distributor, err := frankenstein.NewDistributor(frankenstein.DistributorConfig{

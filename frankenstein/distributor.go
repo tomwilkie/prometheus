@@ -37,8 +37,9 @@ type Distributor struct {
 // DistributorConfig contains the configuration require to
 // create a Distributor
 type DistributorConfig struct {
-	ConsulHost   string
-	ConsulPrefix string
+	ConsulHost    string
+	ConsulPrefix  string
+	ClientFactory func(string) (storage.SampleAppender, error)
 }
 
 // Collector is the serialised state in Consul representing
@@ -80,24 +81,27 @@ func (d *Distributor) loop() {
 	})
 }
 
-func (d *Distributor) getClientFor(hostname string) storage.SampleAppender {
+func (d *Distributor) getClientFor(hostname string) (storage.SampleAppender, error) {
 	d.clientsMtx.RLock()
 	client, ok := d.clients[hostname]
 	d.clientsMtx.RUnlock()
 	if ok {
-		return client
+		return client, nil
 	}
 
 	d.clientsMtx.Lock()
 	defer d.clientsMtx.Unlock()
 	client, ok = d.clients[hostname]
 	if ok {
-		return client
+		return client, nil
 	}
 
-	client = nil // TODO, when we have a client/server for SampleAppender
+	client, err := d.cfg.ClientFactory(hostname)
+	if err != nil {
+		return nil, err
+	}
 	d.clients[hostname] = client
-	return client
+	return client, nil
 }
 
 // Append implements storage.SampleAppender
@@ -108,7 +112,10 @@ func (d *Distributor) Append(sample *model.Sample) error {
 		return err
 	}
 
-	client := d.getClientFor(collector.Hostname)
+	client, err := d.getClientFor(collector.Hostname)
+	if err != nil {
+		return err
+	}
 	return client.Append(sample)
 }
 

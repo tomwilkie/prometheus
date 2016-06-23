@@ -61,7 +61,7 @@ func AppenderHandler(appender storage.SampleAppender) http.Handler {
 				})
 				if err != nil {
 					log.Errorf(err.Error())
-					http.Error(w, err.Error(), http.StatusBadRequest)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
 			}

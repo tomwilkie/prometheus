@@ -36,7 +36,7 @@ func main() {
 	flag.StringVar(&listen, "web.listen-address", ":9094", "HTTP server listen address.")
 	flag.StringVar(&consulHost, "consul.hostname", "localhost:8500", "Hostname and port of Consul.")
 	flag.StringVar(&consulPrefix, "consul.prefix", "collectors/", "Prefix for keys in Consul.")
-	flag.DurationVar(&remoteTimeout, "remote.timeout", 100*time.Millisecond, "Timeout for upstream collectors.")
+	flag.DurationVar(&remoteTimeout, "remote.timeout", 100*time.Millisecond, "Timeout for downstream injestors.")
 
 	clientFactory := func(hostname string) (storage.SampleAppender, error) {
 		storage := remote.New(&remote.Options{

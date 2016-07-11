@@ -52,6 +52,7 @@ start_container 1 frankenstein distributor \
     -- -consul.hostname=consul1:8500
 
 # Tell distributor about ingestor
+sleep 1
 curl -X PUT -d '{"hostname": "http://ingestor1:9090/push", "tokens": [0]}' "http://$(docker-machine ip $(docker-machine active)):8500/v1/kv/collectors/localhost"
 
 # Start a prometheus in retrival mode

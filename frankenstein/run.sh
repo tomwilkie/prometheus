@@ -2,6 +2,8 @@
 
 set -eux
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Put everything on a docker network called 'frank'
 # so we can use docker dns.
 if ! (docker network ls | grep frank); then
@@ -44,11 +46,18 @@ start_container 1 lphoward/fake-s3 s3
 start_container 1 consul consul -p 8500:8500 -- agent -ui -server -client=0.0.0.0 -bootstrap
 
 # Services
-start_container 1 prometheus ingestor -- -config.file=empty.yml
-start_container 1 frankenstein distributor -- -consul.hostname=consul1:8500
+start_container 1 prometheus ingestor \
+    -v ${DIR}/ingestor-config:/etc/prometheus/
+start_container 1 frankenstein distributor \
+    -- -consul.hostname=consul1:8500
 
 # Tell distributor about ingestor
 curl -X PUT -d '{"hostname": "http://ingestor1:9090/push", "tokens": [0]}' "http://$(docker-machine ip $(docker-machine active)):8500/v1/kv/collectors/localhost"
 
 # Start a prometheus in retrival mode
-start_container 1 prometheus retrieval -- -config.file=frankenstein/retrieval.yml -web.listen-address=:9091 -retrieval-only -storage.remote.generic-url=http://distributor1:9094/push
+start_container 1 prometheus retrieval \
+    -v ${DIR}/retrieval-config:/etc/prometheus/ \
+        -- \
+    -config.file=/etc/prometheus/prometheus.yml \
+    -web.listen-address=:9091 -retrieval-only \
+    -storage.remote.generic-url=http://distributor1:9094/push

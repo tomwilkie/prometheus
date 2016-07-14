@@ -37,8 +37,8 @@ const (
 	hashKey    = "h"
 	rangeKey   = "r"
 	chunkKey   = "c"
-	maxChunkID = "0000000000000000"
-	minChunkID = "FFFFFFFFFFFFFFFF"
+	minChunkID = "0000000000000000"
+	maxChunkID = "FFFFFFFFFFFFFFFF"
 )
 
 var (

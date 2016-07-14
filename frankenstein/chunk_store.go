@@ -187,7 +187,7 @@ func (c *AWSChunkStore) Put(chunks []Chunk) error {
 		}
 
 		for _, hour := range bigBuckets(chunk.From, chunk.Through) {
-			hashValue := fmt.Sprintf("%s:%s", hour, metricName)
+			hashValue := fmt.Sprintf("%d:%s", hour, metricName)
 
 			for label, value := range chunk.Metric {
 				// TODO escaping
@@ -277,7 +277,7 @@ func (c *AWSChunkStore) lookupChunksFor(hour int64, metricName model.LabelValue,
 	}
 
 	// TODO escaping - this will break if label values contain the separator (:)
-	hashValue := fmt.Sprintf("%s:%s", hour, metricName)
+	hashValue := fmt.Sprintf("%d:%s", hour, metricName)
 	rangeMinValue := fmt.Sprintf("%s=%s:%s", matcher.Name, matcher.Value, minChunkID)
 	rangeMaxValue := fmt.Sprintf("%s=%s:%s", matcher.Name, matcher.Value, maxChunkID)
 

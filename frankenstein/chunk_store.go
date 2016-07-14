@@ -150,7 +150,7 @@ func bigBuckets(from, through model.Time) []int64 {
 		throughHour   = through.Unix() / secondsInHour
 		result        []int64
 	)
-	for i := fromHour; i <= throughHour; i += secondsInHour {
+	for i := fromHour; i <= throughHour; i++ {
 		result = append(result, i)
 	}
 	return result

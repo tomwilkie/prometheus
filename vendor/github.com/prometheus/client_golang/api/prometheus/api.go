@@ -38,6 +38,7 @@ const (
 
 	epQuery       = "/query"
 	epQueryRange  = "/query_range"
+	epQueryRaw    = "/query_raw"
 	epLabelValues = "/label/:name/values"
 	epSeries      = "/series"
 )
@@ -277,6 +278,8 @@ type QueryAPI interface {
 	Query(ctx context.Context, query string, ts time.Time) (model.Value, error)
 	// Query performs a query for the given range.
 	QueryRange(ctx context.Context, query string, r Range) (model.Value, error)
+	// QueryRaw performs a raw query for the given range.
+	QueryRaw(ctx context.Context, matchers string, r Range) (model.Value, error)
 }
 
 // NewQueryAPI returns a new QueryAPI for the client.
@@ -324,6 +327,34 @@ func (h *httpQueryAPI) QueryRange(ctx context.Context, query string, r Range) (m
 	q.Set("start", start)
 	q.Set("end", end)
 	q.Set("step", step)
+
+	u.RawQuery = q.Encode()
+
+	req, _ := http.NewRequest("GET", u.String(), nil)
+
+	_, body, err := h.client.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var qres queryResult
+	err = json.Unmarshal(body, &qres)
+
+	return model.Value(qres.v), err
+}
+
+func (h *httpQueryAPI) QueryRaw(ctx context.Context, matchers string, r Range) (model.Value, error) {
+	u := h.client.url(epQueryRaw, nil)
+	q := u.Query()
+
+	var (
+		start = r.Start.Format(time.RFC3339Nano)
+		end   = r.End.Format(time.RFC3339Nano)
+	)
+
+	q.Set("match", matchers)
+	q.Set("start", start)
+	q.Set("end", end)
 
 	u.RawQuery = q.Encode()
 

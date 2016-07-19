@@ -61,10 +61,14 @@ func (q *IngesterQuerier) Query(from, to model.Time, matchers ...*metric.LabelMa
 		strs = append(strs, m.String())
 	}
 	// TODO: Is LabelMatcher.String() sufficiently escaped?
-	expr := fmt.Sprintf("{%s}[%ds]", strings.Join(strs, ","), int64(to.Sub(from).Seconds()))
+	matcherStr := fmt.Sprintf("{%s}", strings.Join(strs, ","))
 
 	// Query the remote ingester.
-	res, err := q.api.Query(context.Background(), expr, to.Time())
+	queryRange := prometheus.Range{
+		Start: from.Time(),
+		End:   to.Time(),
+	}
+	res, err := q.api.QueryRaw(context.Background(), matcherStr, queryRange)
 	if err != nil {
 		return nil, err
 	}
@@ -73,21 +77,6 @@ func (q *IngesterQuerier) Query(from, to model.Time, matchers ...*metric.LabelMa
 	switch res.Type() {
 	case model.ValMatrix:
 		return res.(model.Matrix), nil
-	case model.ValVector:
-		v := res.(model.Vector)
-		m := make(model.Matrix, 0, len(v))
-		for _, s := range v {
-			m = append(m, &model.SampleStream{
-				Metric: s.Metric,
-				Values: []model.SamplePair{
-					{
-						Value:     s.Value,
-						Timestamp: s.Timestamp,
-					},
-				},
-			})
-		}
-		return m, nil
 	default:
 		panic("unexpected response value type")
 	}

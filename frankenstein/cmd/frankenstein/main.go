@@ -24,6 +24,7 @@ import (
 	"time"
 
 	consul "github.com/hashicorp/consul/api"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/route"
 
@@ -88,6 +89,7 @@ func main() {
 		log.Fatalf("Mode %s not supported!", mode)
 	}
 
+	http.Handle("/metrics", prometheus.Handler())
 	http.ListenAndServe(listen, nil)
 }
 
@@ -164,6 +166,7 @@ func setupIngestor(consulClient frankenstein.ConsulClient, consulPrefix string, 
 	if err != nil {
 		log.Fatal(err)
 	}
+	prometheus.MustRegister(ingestor)
 	http.Handle("/push", frankenstein.AppenderHandler(ingestor))
 }
 

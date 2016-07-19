@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	flushCheckPeriod = 1 * time.Minute
+	flushCheckPeriod = 5 * time.Second
+	maxChunkAge      = 30 * time.Second
 )
 
 // Ingestor deals with "in flight" chunks.
@@ -41,10 +42,6 @@ type ChunkStore interface {
 }
 
 func NewIngestor(chunkStore ChunkStore) (*Ingestor, error) {
-
-	// FOR TESTING
-	headChunkTimeout = 2 * time.Minute
-
 	i := &Ingestor{
 		chunkStore: chunkStore,
 		quit:       make(chan struct{}),
@@ -191,7 +188,11 @@ func (i *Ingestor) flushSeries(fp model.Fingerprint, series *memorySeries) error
 	i.fpLocker.Lock(fp)
 
 	// Decide what chunks to flush
-	series.maybeCloseHeadChunk()
+	if time.Now().Sub(series.firstTime().Time()) > maxChunkAge {
+		series.headChunkClosed = true
+		series.headChunkUsedByIterator = false
+		series.head().maybePopulateLastTime()
+	}
 	chunks := series.chunkDescs
 	if !series.headChunkClosed {
 		chunks = chunks[:len(chunks)-1]

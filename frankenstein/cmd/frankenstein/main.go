@@ -135,7 +135,8 @@ func setupDistributor(
 	// TODO: Move querier to separate binary.
 	querier := frankenstein.MergeQuerier{
 		Queriers: []frankenstein.Querier{
-			distributor,
+			// TODO: Re-add Distributor. The new ingestor cannot be queried yet, so
+			// this would currently throw an error.
 			&frankenstein.ChunkQuerier{
 				Store: chunkStore,
 			},

@@ -180,7 +180,7 @@ func writeIngestorConfigToConsul(consulClient frankenstein.ConsulClient, consulP
 	tokenHasher.Write([]byte(hostname))
 
 	buf, err := json.Marshal(frankenstein.Collector{
-		Hostname: hostname + ":9094",
+		Hostname: hostname + ":9095",
 		Tokens:   []uint64{tokenHasher.Sum64()},
 	})
 	if err != nil {

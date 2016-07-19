@@ -4,6 +4,8 @@ package local
 
 import (
 	"fmt"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,6 +31,7 @@ type Ingestor struct {
 	fpLocker   *fingerprintLocker
 	fpToSeries *seriesMap
 	mapper     *fpMapper
+	index      *invertedIndex
 
 	ingestedSamples    prometheus.Counter
 	discardedSamples   *prometheus.CounterVec
@@ -49,6 +52,7 @@ func NewIngestor(chunkStore ChunkStore) (*Ingestor, error) {
 
 		fpToSeries: newSeriesMap(),
 		fpLocker:   newFingerprintLocker(16),
+		index:      newInvertedIndex(),
 
 		ingestedSamples: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
@@ -155,10 +159,13 @@ func (i *Ingestor) getOrCreateSeries(metric model.Metric) (model.Fingerprint, *m
 		panic(err)
 	}
 	i.fpToSeries.put(fp, series)
+	i.index.add(metric, fp)
 	return fp, series, nil
 }
 
 func (i *Ingestor) Query(from, to model.Time, matchers ...*metric.LabelMatcher) (model.Matrix, error) {
+	fps := i.index.lookup(matchers)
+	log.Infof("Query: should return %v", fps)
 	return model.Matrix{}, nil
 }
 
@@ -258,4 +265,81 @@ func (i *Ingestor) Collect(ch chan<- prometheus.Metric) {
 	i.discardedSamples.Collect(ch)
 	ch <- i.storedChunks
 	ch <- i.chunkStoreFailures
+}
+
+type invertedIndex struct {
+	mtx sync.RWMutex
+	idx map[model.LabelName]map[model.LabelValue][]model.Fingerprint // entries are sorted in fp order?
+}
+
+func newInvertedIndex() *invertedIndex {
+	return &invertedIndex{
+		idx: map[model.LabelName]map[model.LabelValue][]model.Fingerprint{},
+	}
+}
+
+func (i *invertedIndex) add(metric model.Metric, fp model.Fingerprint) {
+	i.mtx.Lock()
+	defer i.mtx.Unlock()
+
+	for name, value := range metric {
+		values, ok := i.idx[name]
+		if !ok {
+			values = map[model.LabelValue][]model.Fingerprint{}
+		}
+		fingerprints, ok := values[value]
+		j := sort.Search(len(fingerprints), func(i int) bool {
+			return fingerprints[i] >= fp
+		})
+		fingerprints = append(fingerprints, 0)
+		copy(fingerprints[j+1:], fingerprints[j:])
+		fingerprints[j] = fp
+		values[value] = fingerprints
+		i.idx[name] = values
+	}
+}
+
+func (i *invertedIndex) lookup(matchers []*metric.LabelMatcher) []model.Fingerprint {
+	if len(matchers) == 0 {
+		return nil
+	}
+	i.mtx.RLock()
+	defer i.mtx.RUnlock()
+
+	// intersection is initially nil, which is a special case.
+	var intersection []model.Fingerprint
+	for _, matcher := range matchers {
+		values, ok := i.idx[matcher.Name]
+		if !ok {
+			return nil
+		}
+		for value, fps := range values {
+			if matcher.Match(value) {
+				intersection = intersect(intersection, fps)
+			}
+			if len(intersection) == 0 {
+				return nil
+			}
+		}
+	}
+
+	return intersection
+}
+
+func intersect(a, b []model.Fingerprint) []model.Fingerprint {
+	if a == nil {
+		return b
+	}
+	result := []model.Fingerprint{}
+	for i, j := 0, 0; i < len(a) && j < len(b); {
+		if a[i] == b[j] {
+			result = append(result, a[i])
+		}
+		if a[i] < b[j] {
+			i++
+		} else {
+			j++
+		}
+	}
+	return result
 }

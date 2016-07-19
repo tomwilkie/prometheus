@@ -222,7 +222,7 @@ func (i *Ingestor) flushSeries(fp model.Fingerprint, series *memorySeries) error
 }
 
 func (i *Ingestor) flushChunks(fp model.Fingerprint, metric model.Metric, chunks []*chunkDesc) error {
-	wireChunks := make([]wire.Chunk, len(chunks))
+	wireChunks := make([]wire.Chunk, 0, len(chunks))
 	for _, chunk := range chunks {
 		buf := make([]byte, chunkLen)
 		if err := chunk.c.marshalToBuf(buf); err != nil {

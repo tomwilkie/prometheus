@@ -166,7 +166,29 @@ func (i *Ingestor) getOrCreateSeries(metric model.Metric) (model.Fingerprint, *m
 func (i *Ingestor) Query(from, to model.Time, matchers ...*metric.LabelMatcher) (model.Matrix, error) {
 	fps := i.index.lookup(matchers)
 	log.Infof("Query: should return %v", fps)
-	return model.Matrix{}, nil
+
+	// fps is sorted, lock them in order to prevent deadlocks
+	for _, fp := range fps {
+		i.fpLocker.Lock(fp)
+		defer i.fpLocker.Unlock(fp)
+	}
+
+	result := model.Matrix{}
+	for _, fp := range fps {
+		series, ok := i.fpToSeries.get(fp)
+		if !ok {
+			continue
+		}
+
+		// TODO samples!
+
+		result = append(result, &model.SampleStream{
+			Metric: series.metric,
+			Values: []model.SamplePair{},
+		})
+	}
+
+	return result, nil
 }
 
 func (i *Ingestor) Stop() {
@@ -287,7 +309,7 @@ func (i *invertedIndex) add(metric model.Metric, fp model.Fingerprint) {
 		if !ok {
 			values = map[model.LabelValue][]model.Fingerprint{}
 		}
-		fingerprints, ok := values[value]
+		fingerprints := values[value]
 		j := sort.Search(len(fingerprints), func(i int) bool {
 			return fingerprints[i] >= fp
 		})
@@ -324,6 +346,39 @@ func (i *invertedIndex) lookup(matchers []*metric.LabelMatcher) []model.Fingerpr
 	}
 
 	return intersection
+}
+
+func (i *invertedIndex) delete(metric model.Metric, fp model.Fingerprint) {
+	i.mtx.Lock()
+	defer i.mtx.Unlock()
+
+	for name, value := range metric {
+		values, ok := i.idx[name]
+		if !ok {
+			continue
+		}
+		fingerprints, ok := values[value]
+		if !ok {
+			continue
+		}
+
+		j := sort.Search(len(fingerprints), func(i int) bool {
+			return fingerprints[i] >= fp
+		})
+		fingerprints = fingerprints[:j+copy(fingerprints[j:], fingerprints[j+1:])]
+
+		if len(fingerprints) == 0 {
+			delete(values, value)
+		} else {
+			values[value] = fingerprints
+		}
+
+		if len(values) == 0 {
+			delete(i.idx, name)
+		} else {
+			i.idx[name] = values
+		}
+	}
 }
 
 func intersect(a, b []model.Fingerprint) []model.Fingerprint {

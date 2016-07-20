@@ -283,11 +283,11 @@ func (i *Ingestor) flushSeries(fp model.Fingerprint, series *memorySeries) error
 	i.storedChunks.Add(float64(len(chunks)))
 
 	// now remove the chunks
-	// TODO deal with iterator reading from them
 	i.fpLocker.Lock(fp)
 	series.chunkDescs = series.chunkDescs[len(chunks):]
 	if len(series.chunkDescs) == 0 {
 		i.fpToSeries.del(fp)
+		i.index.delete(series.metric, fp)
 	}
 	i.fpLocker.Unlock(fp)
 	return nil

@@ -381,7 +381,7 @@ func (i *invertedIndex) lookup(matchers []*metric.LabelMatcher) []model.Fingerpr
 		var toIntersect []model.Fingerprint
 		for value, fps := range values {
 			if matcher.Match(value) {
-				toIntersect = union(toIntersect, fps)
+				toIntersect = merge(toIntersect, fps)
 			}
 		}
 		intersection = intersect(intersection, toIntersect)
@@ -426,6 +426,8 @@ func (i *invertedIndex) delete(metric model.Metric, fp model.Fingerprint) {
 	}
 }
 
+// intersect two sorted lists of fingerprints.  Assumes there are no duplicate
+// fingerprints within the input lists.
 func intersect(a, b []model.Fingerprint) []model.Fingerprint {
 	if a == nil {
 		return b
@@ -444,14 +446,12 @@ func intersect(a, b []model.Fingerprint) []model.Fingerprint {
 	return result
 }
 
-func union(a, b []model.Fingerprint) []model.Fingerprint {
-	var result []model.Fingerprint
+// merge two sorted lists of fingerprints.  Assumes there are no duplicate
+// fingerprints between or within the input lists.
+func merge(a, b []model.Fingerprint) []model.Fingerprint {
+	result := make([]model.Fingerprint, 0, len(a)+len(b))
 	for i, j := 0, 0; i < len(a) && j < len(b); {
-		if a[i] == b[j] {
-			result = append(result, a[i])
-			i++
-			j++
-		} else if a[i] < b[j] {
+		if a[i] < b[j] {
 			result = append(result, a[i])
 			i++
 		} else {

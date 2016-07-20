@@ -21,6 +21,7 @@ import (
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
 
+	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote/generic"
 )
@@ -68,5 +69,52 @@ func AppenderHandler(appender storage.SampleAppender) http.Handler {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+func QueryHandler(querier Querier) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+
+		matchers, err := promql.ParseMetricSelector(r.FormValue("match"))
+		if err != nil {
+			respondError(w, &apiError{errorBadData, err}, nil)
+			return
+		}
+
+		var start model.Time
+		if t := r.FormValue("start"); t != "" {
+			var err error
+			start, err = parseTime(t)
+			if err != nil {
+				respondError(w, &apiError{errorBadData, err}, nil)
+				return
+			}
+		} else {
+			start = model.Earliest
+		}
+
+		var end model.Time
+		if t := r.FormValue("end"); t != "" {
+			var err error
+			end, err = parseTime(t)
+			if err != nil {
+				respondError(w, &apiError{errorBadData, err}, nil)
+				return
+			}
+		} else {
+			end = model.Latest
+		}
+
+		res, err := querier.Query(start, end, matchers...)
+		if err != nil {
+			respondError(w, &apiError{errorExec, err}, nil)
+			return
+		}
+
+		respond(w, &queryData{
+			ResultType: model.ValMatrix,
+			Result:     res,
+		})
 	})
 }

@@ -135,8 +135,7 @@ func setupDistributor(
 	// TODO: Move querier to separate binary.
 	querier := frankenstein.MergeQuerier{
 		Queriers: []frankenstein.Querier{
-			// TODO: Re-add Distributor. The new ingestor cannot be queried yet, so
-			// this would currently throw an error.
+			distributor,
 			&frankenstein.ChunkQuerier{
 				Store: chunkStore,
 			},
@@ -169,6 +168,7 @@ func setupIngestor(consulClient frankenstein.ConsulClient, consulPrefix string, 
 	}
 	prometheus.MustRegister(ingestor)
 	http.Handle("/push", frankenstein.AppenderHandler(ingestor))
+	http.Handle("/api/v1/query_raw", frankenstein.QueryHandler(ingestor))
 }
 
 func writeIngestorConfigToConsul(consulClient frankenstein.ConsulClient, consulPrefix string) error {

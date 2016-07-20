@@ -163,32 +163,75 @@ func (i *Ingestor) getOrCreateSeries(metric model.Metric) (model.Fingerprint, *m
 	return fp, series, nil
 }
 
-func (i *Ingestor) Query(from, to model.Time, matchers ...*metric.LabelMatcher) (model.Matrix, error) {
+func (i *Ingestor) Query(from, through model.Time, matchers ...*metric.LabelMatcher) (model.Matrix, error) {
 	fps := i.index.lookup(matchers)
 	log.Infof("Query: should return %v", fps)
 
 	// fps is sorted, lock them in order to prevent deadlocks
-	for _, fp := range fps {
-		i.fpLocker.Lock(fp)
-		defer i.fpLocker.Unlock(fp)
-	}
-
 	result := model.Matrix{}
 	for _, fp := range fps {
+		i.fpLocker.Lock(fp)
 		series, ok := i.fpToSeries.get(fp)
 		if !ok {
+			i.fpLocker.Unlock(fp)
 			continue
 		}
 
-		// TODO samples!
+		values, err := samplesForRange(series, from, through)
+		i.fpLocker.Unlock(fp)
+		if err != nil {
+			return nil, err
+		}
 
 		result = append(result, &model.SampleStream{
 			Metric: series.metric,
-			Values: []model.SamplePair{},
+			Values: values,
 		})
 	}
 
 	return result, nil
+}
+
+func samplesForRange(s *memorySeries, from, through model.Time) ([]model.SamplePair, error) {
+	// Find first chunk with start time after "from".
+	fromIdx := sort.Search(len(s.chunkDescs), func(i int) bool {
+		return s.chunkDescs[i].firstTime().After(from)
+	})
+	// Find first chunk with start time after "through".
+	throughIdx := sort.Search(len(s.chunkDescs), func(i int) bool {
+		return s.chunkDescs[i].firstTime().After(through)
+	})
+	if fromIdx == len(s.chunkDescs) {
+		// Even the last chunk starts before "from". Find out if the
+		// series ends before "from" and we don't need to do anything.
+		lt, err := s.chunkDescs[len(s.chunkDescs)-1].lastTime()
+		if err != nil {
+			return nil, err
+		}
+		if lt.Before(from) {
+			return nil, nil
+		}
+	}
+	if fromIdx > 0 {
+		fromIdx--
+	}
+	if throughIdx == len(s.chunkDescs) {
+		throughIdx--
+	}
+	var values []model.SamplePair
+	in := metric.Interval{
+		OldestInclusive: from,
+		NewestInclusive: through,
+	}
+	for idx := fromIdx; idx <= throughIdx; idx++ {
+		cd := s.chunkDescs[idx]
+		chValues, err := rangeValues(cd.c.newIterator(), in)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, chValues...)
+	}
+	return values, nil
 }
 
 func (i *Ingestor) Stop() {
@@ -335,13 +378,15 @@ func (i *invertedIndex) lookup(matchers []*metric.LabelMatcher) []model.Fingerpr
 		if !ok {
 			return nil
 		}
+		var toIntersect []model.Fingerprint
 		for value, fps := range values {
 			if matcher.Match(value) {
-				intersection = intersect(intersection, fps)
+				toIntersect = union(toIntersect, fps)
 			}
-			if len(intersection) == 0 {
-				return nil
-			}
+		}
+		intersection = intersect(intersection, toIntersect)
+		if len(intersection) == 0 {
+			return nil
 		}
 	}
 
@@ -393,6 +438,24 @@ func intersect(a, b []model.Fingerprint) []model.Fingerprint {
 		if a[i] < b[j] {
 			i++
 		} else {
+			j++
+		}
+	}
+	return result
+}
+
+func union(a, b []model.Fingerprint) []model.Fingerprint {
+	var result []model.Fingerprint
+	for i, j := 0, 0; i < len(a) && j < len(b); {
+		if a[i] == b[j] {
+			result = append(result, a[i])
+			i++
+			j++
+		} else if a[i] < b[j] {
+			result = append(result, a[i])
+			i++
+		} else {
+			result = append(result, b[i])
 			j++
 		}
 	}

@@ -86,7 +86,9 @@ func main() {
 	case distributor:
 		setupDistributor(consul, consulPrefix, chunkStore, remoteTimeout)
 	case ingestor:
-		setupIngestor(consul, consulPrefix, chunkStore, listenPort)
+		ingestor := setupIngestor(consul, consulPrefix, chunkStore, listenPort)
+		defer deleteIngestorConfigFromConsul(consul, consulPrefix)
+		defer ingestor.Stop()
 	default:
 		log.Fatalf("Mode %s not supported!", mode)
 	}
@@ -155,7 +157,7 @@ func setupIngestor(
 	consulPrefix string,
 	chunkStore frankenstein.ChunkStore,
 	listenPort int,
-) {
+) *local.Ingestor {
 	for i := 0; i < 10; i++ {
 		log.Info("Adding ingestor to consul")
 		if err := writeIngestorConfigToConsul(consulClient, consulPrefix, listenPort); err == nil {
@@ -173,6 +175,7 @@ func setupIngestor(
 	prometheus.MustRegister(ingestor)
 	http.Handle("/push", frankenstein.AppenderHandler(ingestor))
 	http.Handle("/query", frankenstein.QueryHandler(ingestor))
+	return ingestor
 }
 
 // GetFirstAddressOf returns the first IPv4 address of the supplied interface name.
@@ -219,6 +222,27 @@ func writeIngestorConfigToConsul(consulClient frankenstein.ConsulClient, consulP
 	buf, err := json.Marshal(frankenstein.Collector{
 		Hostname: fmt.Sprintf("%s:%d", addr, listenPort),
 		Tokens:   []uint64{tokenHasher.Sum64()},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = consulClient.Put(&consul.KVPair{
+		Key:   consulPrefix + hostname,
+		Value: buf,
+	}, &consul.WriteOptions{})
+	return err
+}
+
+func deleteIngestorConfigFromConsul(consulClient frankenstein.ConsulClient, consulPrefix string) error {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+
+	buf, err := json.Marshal(frankenstein.Collector{
+		Hostname: "",
+		Tokens:   []uint64{},
 	})
 	if err != nil {
 		return err

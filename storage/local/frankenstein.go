@@ -260,27 +260,32 @@ func (i *Ingestor) Stop() {
 }
 
 func (i *Ingestor) loop() {
+	defer i.flushAllSeries(true)
 	defer close(i.done)
 	tick := time.Tick(flushCheckPeriod)
 	for {
 		select {
 		case <-tick:
-			for pair := range i.fpToSeries.iter() {
-				if err := i.flushSeries(pair.fp, pair.series); err != nil {
-					log.Errorf("Failed to flush chunks for series: %v", err)
-				}
-			}
+			i.flushAllSeries(false)
 		case <-i.quit:
 			return
 		}
 	}
 }
 
-func (i *Ingestor) flushSeries(fp model.Fingerprint, series *memorySeries) error {
+func (i *Ingestor) flushAllSeries(immediate bool) {
+	for pair := range i.fpToSeries.iter() {
+		if err := i.flushSeries(pair.fp, pair.series, immediate); err != nil {
+			log.Errorf("Failed to flush chunks for series: %v", err)
+		}
+	}
+}
+
+func (i *Ingestor) flushSeries(fp model.Fingerprint, series *memorySeries, immediate bool) error {
 	i.fpLocker.Lock(fp)
 
 	// Decide what chunks to flush
-	if time.Now().Sub(series.firstTime().Time()) > maxChunkAge {
+	if immediate || time.Now().Sub(series.firstTime().Time()) > maxChunkAge {
 		series.headChunkClosed = true
 		series.headChunkUsedByIterator = false
 		series.head().maybePopulateLastTime()

@@ -22,6 +22,8 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	consul "github.com/hashicorp/consul/api"
@@ -94,7 +96,12 @@ func main() {
 	}
 
 	http.Handle("/metrics", prometheus.Handler())
-	http.ListenAndServe(fmt.Sprintf(":%d", listenPort), nil)
+	go http.ListenAndServe(fmt.Sprintf(":%d", listenPort), nil)
+
+	term := make(chan os.Signal)
+	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
+	<-term
+	log.Warn("Received SIGTERM, exiting gracefully...")
 }
 
 func setupDistributor(
@@ -159,7 +166,6 @@ func setupIngestor(
 	listenPort int,
 ) *local.Ingestor {
 	for i := 0; i < 10; i++ {
-		log.Info("Adding ingestor to consul")
 		if err := writeIngestorConfigToConsul(consulClient, consulPrefix, listenPort); err == nil {
 			break
 		} else {
@@ -206,6 +212,8 @@ func GetFirstAddressOf(name string) (string, error) {
 }
 
 func writeIngestorConfigToConsul(consulClient frankenstein.ConsulClient, consulPrefix string, listenPort int) error {
+	log.Info("Adding ingestor to consul")
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		return err
@@ -235,6 +243,8 @@ func writeIngestorConfigToConsul(consulClient frankenstein.ConsulClient, consulP
 }
 
 func deleteIngestorConfigFromConsul(consulClient frankenstein.ConsulClient, consulPrefix string) error {
+	log.Info("Removing ingestor from consul")
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		return err

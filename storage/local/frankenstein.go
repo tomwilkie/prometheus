@@ -25,6 +25,8 @@ const (
 // Its like MemorySeriesStorage, but simpler.
 type Ingestor struct {
 	chunkStore ChunkStore
+	stopLock   sync.RWMutex
+	stopped    bool
 	quit       chan struct{}
 	done       chan struct{}
 
@@ -116,6 +118,13 @@ func (i *Ingestor) Append(sample *model.Sample) error {
 			delete(sample.Metric, ln)
 		}
 	}
+
+	i.stopLock.RLock()
+	defer i.stopLock.RUnlock()
+	if i.stopped {
+		return fmt.Errorf("ingestor stopping")
+	}
+
 	fp, series, err := i.getOrCreateSeries(sample.Metric)
 	if err != nil {
 		return err
@@ -255,6 +264,10 @@ func samplesForRange(s *memorySeries, from, through model.Time) ([]model.SampleP
 }
 
 func (i *Ingestor) Stop() {
+	i.stopLock.Lock()
+	i.stopped = true
+	i.stopLock.Unlock()
+
 	close(i.quit)
 	<-i.done
 }
@@ -301,6 +314,7 @@ func (i *Ingestor) flushSeries(fp model.Fingerprint, series *memorySeries, immed
 
 	// flush the chunks without locking the series
 	i.fpLocker.Unlock(fp)
+	log.Infof("Flushing %d chunks", len(chunks))
 	if err := i.flushChunks(fp, series.metric, chunks); err != nil {
 		i.chunkStoreFailures.Add(float64(len(chunks)))
 		return err

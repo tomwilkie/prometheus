@@ -89,8 +89,8 @@ func main() {
 		setupDistributor(consul, consulPrefix, chunkStore, remoteTimeout)
 	case ingestor:
 		ingestor := setupIngestor(consul, consulPrefix, chunkStore, listenPort)
-		defer deleteIngestorConfigFromConsul(consul, consulPrefix)
 		defer ingestor.Stop()
+		defer deleteIngestorConfigFromConsul(consul, consulPrefix)
 	default:
 		log.Fatalf("Mode %s not supported!", mode)
 	}

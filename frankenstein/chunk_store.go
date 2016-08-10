@@ -29,6 +29,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
+	"github.com/sburnett/lexicographic-tuples"
 	"golang.org/x/net/context"
 
 	"github.com/prometheus/prometheus/frankenstein/wire"
@@ -175,7 +176,7 @@ func (c *AWSChunkStore) CreateTables() error {
 			},
 			{
 				AttributeName: aws.String(rangeKey),
-				AttributeType: aws.String("S"),
+				AttributeType: aws.String("B"),
 			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
@@ -219,9 +220,13 @@ func hashValue(userID string, hour int64, metricName model.LabelValue) string {
 	return fmt.Sprintf("%s:%d:%s", userID, hour, metricName)
 }
 
-func rangeValue(label model.LabelName, value model.LabelValue, chunkID string) string {
-	// TODO escaping - this will fail is the label name has an equals in it.
-	return fmt.Sprintf("%s=%s:%s", label, value, chunkID)
+func rangeValue(label model.LabelName, value model.LabelValue, chunkID string) []byte {
+	return lex.EncodeOrDie(label, value, chunkID)
+}
+
+func parseRangeValue(v []byte) (label model.LabelName, value model.LabelValue, chunkID string, err error) {
+	_, err = lex.Decode(v, &label, &value, &chunkID)
+	return
 }
 
 // Put implements ChunkStore
@@ -273,7 +278,7 @@ func (c *AWSChunkStore) Put(ctx context.Context, chunks []wire.Chunk) error {
 					PutRequest: &dynamodb.PutRequest{
 						Item: map[string]*dynamodb.AttributeValue{
 							hashKey:  {S: aws.String(hashValue)},
-							rangeKey: {S: aws.String(rangeValue)},
+							rangeKey: {B: rangeValue},
 							chunkKey: {B: chunkValue},
 						},
 					},
@@ -383,18 +388,24 @@ func (c *AWSChunkStore) lookupChunks(userID string, from, through model.Time, ma
 	return chunkSets, nil
 }
 
+func next(s model.LabelName) model.LabelName {
+	l := len(s)
+	return s[:l-2] + model.LabelName(s[l-1]+1)
+}
+
 func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName model.LabelValue, matchers []*metric.LabelMatcher, incomingChunkSets chan []wire.Chunk, incomingErrors chan error) {
 	var chunkSets [][]wire.Chunk
 	for _, matcher := range matchers {
-		// TODO build support for other matchers
-		if matcher.Type != metric.Equal {
-			incomingErrors <- fmt.Errorf("%s matcher not supported yet", matcher.Type)
-			return
-		}
 
 		hashValue := hashValue(userID, hour, metricName)
-		rangeMinValue := rangeValue(matcher.Name, matcher.Value, minChunkID)
-		rangeMaxValue := rangeValue(matcher.Name, matcher.Value, maxChunkID)
+		var rangeMinValue, rangeMaxValue []byte
+		if matcher.Type == metric.Equal {
+			rangeMinValue = rangeValue(matcher.Name, matcher.Value, minChunkID)
+			rangeMaxValue = rangeValue(matcher.Name, matcher.Value, maxChunkID)
+		} else {
+			rangeMinValue = rangeValue(matcher.Name, "", minChunkID)
+			rangeMaxValue = rangeValue(next(matcher.Name), "", maxChunkID)
+		}
 
 		var resp *dynamodb.QueryOutput
 		err := timeRequest("Query", dynamoRequestDuration, func() error {
@@ -410,8 +421,8 @@ func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName mo
 					},
 					rangeKey: {
 						AttributeValueList: []*dynamodb.AttributeValue{
-							{S: aws.String(rangeMinValue)},
-							{S: aws.String(rangeMaxValue)},
+							{B: rangeMinValue},
+							{B: rangeMaxValue},
 						},
 						ComparisonOperator: aws.String("BETWEEN"),
 					},
@@ -432,17 +443,20 @@ func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName mo
 
 		chunkSet := []wire.Chunk{}
 		for _, item := range resp.Items {
-			rangeValue := item[rangeKey].S
+			rangeValue := item[rangeKey].B
 			if rangeValue == nil {
 				log.Errorf("Invalid item: %v", item)
 				incomingErrors <- err
 				return
 			}
-			parts := strings.SplitN(*rangeValue, ":", 2)
-			if len(parts) != 2 {
+			label, value, chunkID, err := parseRangeValue(rangeValue)
+			if err != nil {
 				log.Errorf("Invalid item: %v", item)
 				incomingErrors <- err
 				return
+			}
+			if label != matcher.Name || !matcher.Match(value) {
+				continue
 			}
 			chunkValue := item[chunkKey].B
 			if rangeValue == nil {
@@ -451,7 +465,7 @@ func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName mo
 				return
 			}
 			chunk := wire.Chunk{
-				ID: parts[1],
+				ID: chunkID,
 			}
 			if err := json.Unmarshal(chunkValue, &chunk); err != nil {
 				log.Errorf("Invalid item: %v", item)

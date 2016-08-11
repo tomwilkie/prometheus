@@ -74,7 +74,7 @@ func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dyn
 	for tableName, writeRequests := range input.RequestItems {
 		table, ok := m.tables[tableName]
 		if !ok {
-			return nil, fmt.Errorf("table not found")
+			return &dynamodb.BatchWriteItemOutput{}, fmt.Errorf("table not found")
 		}
 
 		for _, writeRequest := range writeRequests {

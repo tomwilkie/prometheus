@@ -234,11 +234,13 @@ func hashValue(userID string, hour int64, metricName model.LabelValue) string {
 }
 
 func rangeValue(label model.LabelName, value model.LabelValue, chunkID string) []byte {
-	return lex.EncodeOrDie(label, value, chunkID)
+	return lex.EncodeOrDie(string(label), string(value), chunkID)
 }
 
 func parseRangeValue(v []byte) (label model.LabelName, value model.LabelValue, chunkID string, err error) {
-	_, err = lex.Decode(v, &label, &value, &chunkID)
+	var labelStr, valueStr string
+	_, err = lex.Decode(v, &labelStr, &valueStr, &chunkID)
+	label, value = model.LabelName(labelStr), model.LabelValue(valueStr)
 	return
 }
 

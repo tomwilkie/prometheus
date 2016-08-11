@@ -18,11 +18,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/prometheus/common/model"
 	"golang.org/x/net/context"
 
 	"github.com/prometheus/prometheus/frankenstein/wire"
+	"github.com/prometheus/prometheus/storage/metric"
 )
+
+func init() {
+	spew.Config.SortKeys = true // :\
+}
 
 func c(id string) wire.Chunk {
 	return wire.Chunk{ID: id}
@@ -59,33 +66,58 @@ func TestChunkStore(t *testing.T) {
 			MemcacheClient: nil,
 		},
 	}
+	store.CreateTables()
 
 	ctx := context.WithValue(context.Background(), UserIDContextKey, "0")
 	now := model.Now()
 
-	err := store.Put(ctx, []wire.Chunk{
-		{
-			ID:      "foo",
-			From:    now.Add(-time.Hour),
-			Through: now,
-			Metric: model.Metric{
-				model.MetricNameLabel: "foo",
-				"bar": "baz",
-			},
-			Data: []byte{},
+	chunk1 := wire.Chunk{
+		ID:      "foo",
+		From:    now.Add(-time.Hour),
+		Through: now,
+		Metric: model.Metric{
+			model.MetricNameLabel: "foo",
+			"bar": "baz",
 		},
-		{
-			ID:      "foo",
-			From:    now.Add(-time.Hour),
-			Through: now,
-			Metric: model.Metric{
-				model.MetricNameLabel: "foo",
-				"bar": "beep",
-			},
-			Data: []byte{},
+		Data: []byte{},
+	}
+	chunk2 := wire.Chunk{
+		ID:      "foo",
+		From:    now.Add(-time.Hour),
+		Through: now,
+		Metric: model.Metric{
+			model.MetricNameLabel: "foo",
+			"bar": "beep",
 		},
-	})
+		Data: []byte{},
+	}
+
+	err := store.Put(ctx, []wire.Chunk{chunk1, chunk2})
 	if err != nil {
 		t.Errorf("%v", err)
 	}
+
+	nameMatcher, err := metric.NewLabelMatcher(metric.Equal, model.MetricNameLabel, "foo")
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	chunks, err := store.Get(ctx, now.Add(-time.Hour), now, nameMatcher)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+
+	if !reflect.DeepEqual(chunks, []wire.Chunk{chunk1, chunk2}) {
+		t.Errorf("wrong chunks - " + Diff(chunks, []wire.Chunk{chunk1, chunk2}))
+	}
+}
+
+func Diff(want, have interface{}) string {
+	text, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:        difflib.SplitLines(spew.Sdump(want)),
+		B:        difflib.SplitLines(spew.Sdump(have)),
+		FromFile: "want",
+		ToFile:   "have",
+		Context:  3,
+	})
+	return "\n" + text
 }

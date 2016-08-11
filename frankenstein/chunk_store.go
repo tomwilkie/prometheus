@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"strings"
 	"time"
@@ -144,12 +145,24 @@ func userID(ctx context.Context) (string, error) {
 
 // AWSChunkStore implements ChunkStore for AWS
 type AWSChunkStore struct {
-	dynamodb   *dynamodb.DynamoDB
-	s3         *s3.S3
+	dynamodb   dynamodbClient
+	s3         s3Client
 	memcache   *MemcacheClient
 	tableName  string
 	bucketName string
 	cfg        ChunkStoreConfig
+}
+
+type dynamodbClient interface {
+	CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTableOutput, error)
+	ListTables(*dynamodb.ListTablesInput) (*dynamodb.ListTablesOutput, error)
+	BatchWriteItem(*dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error)
+	Query(*dynamodb.QueryInput) (*dynamodb.QueryOutput, error)
+}
+
+type s3Client interface {
+	PutObject(*s3.PutObjectInput) (*s3.PutObjectOutput, error)
+	GetObject(*s3.GetObjectInput) (*s3.GetObjectOutput, error)
 }
 
 // CreateTables creates the required tables in DynamoDB.
@@ -389,6 +402,7 @@ func (c *AWSChunkStore) lookupChunks(userID string, from, through model.Time, ma
 }
 
 func next(s model.LabelName) model.LabelName {
+	// TODO deal with overflows
 	l := len(s)
 	return s[:l-2] + model.LabelName(s[l-1]+1)
 }
@@ -404,7 +418,7 @@ func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName mo
 			rangeMaxValue = rangeValue(matcher.Name, matcher.Value, maxChunkID)
 		} else {
 			rangeMinValue = rangeValue(matcher.Name, "", minChunkID)
-			rangeMaxValue = rangeValue(next(matcher.Name), "", maxChunkID)
+			rangeMaxValue = rangeValue(next(matcher.Name), "", minChunkID)
 		}
 
 		var resp *dynamodb.QueryOutput
@@ -497,12 +511,12 @@ func (c *AWSChunkStore) fetchChunkData(userID string, chunkSet []wire.Chunk) ([]
 				incomingErrors <- err
 				return
 			}
-			var buf bytes.Buffer
-			if _, err := buf.ReadFrom(resp.Body); err != nil {
+			buf, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
 				incomingErrors <- err
 				return
 			}
-			chunk.Data = buf.Bytes()
+			chunk.Data = buf
 			incomingChunks <- chunk
 		}(chunk)
 	}

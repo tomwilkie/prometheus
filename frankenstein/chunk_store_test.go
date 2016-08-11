@@ -16,6 +16,10 @@ package frankenstein
 import (
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/prometheus/common/model"
+	"golang.org/x/net/context"
 
 	"github.com/prometheus/prometheus/frankenstein/wire"
 )
@@ -39,5 +43,49 @@ func TestIntersect(t *testing.T) {
 		if !reflect.DeepEqual(have, tc.want) {
 			t.Errorf("%v != %v", have, tc.want)
 		}
+	}
+}
+
+func TestChunkStore(t *testing.T) {
+	store := AWSChunkStore{
+		dynamodb:   newMockDynamoDB(),
+		s3:         newMockS3(),
+		memcache:   nil,
+		tableName:  "tablename",
+		bucketName: "bucketname",
+		cfg: ChunkStoreConfig{
+			S3URL:          "",
+			DynamoDBURL:    "",
+			MemcacheClient: nil,
+		},
+	}
+
+	ctx := context.WithValue(context.Background(), UserIDContextKey, "0")
+	now := model.Now()
+
+	err := store.Put(ctx, []wire.Chunk{
+		{
+			ID:      "foo",
+			From:    now.Add(-time.Hour),
+			Through: now,
+			Metric: model.Metric{
+				model.MetricNameLabel: "foo",
+				"bar": "baz",
+			},
+			Data: []byte{},
+		},
+		{
+			ID:      "foo",
+			From:    now.Add(-time.Hour),
+			Through: now,
+			Metric: model.Metric{
+				model.MetricNameLabel: "foo",
+				"bar": "beep",
+			},
+			Data: []byte{},
+		},
+	})
+	if err != nil {
+		t.Errorf("%v", err)
 	}
 }

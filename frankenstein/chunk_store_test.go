@@ -72,7 +72,7 @@ func TestChunkStore(t *testing.T) {
 	now := model.Now()
 
 	chunk1 := wire.Chunk{
-		ID:      "foo",
+		ID:      "chunk1",
 		From:    now.Add(-time.Hour),
 		Through: now,
 		Metric: model.Metric{
@@ -82,7 +82,7 @@ func TestChunkStore(t *testing.T) {
 		Data: []byte{},
 	}
 	chunk2 := wire.Chunk{
-		ID:      "foo",
+		ID:      "chunk2",
 		From:    now.Add(-time.Hour),
 		Through: now,
 		Metric: model.Metric{

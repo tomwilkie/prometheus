@@ -80,6 +80,8 @@ func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dyn
 		for _, writeRequest := range writeRequests {
 			hashValue := *writeRequest.PutRequest.Item[table.hashKey].S
 			rangeValue := writeRequest.PutRequest.Item[table.rangeKey].B
+			fmt.Printf("Write %s/%x\n", hashValue, rangeValue)
+
 			items := table.items[hashValue]
 
 			// insert in order
@@ -110,18 +112,20 @@ func (m *mockDynamoDB) Query(input *dynamodb.QueryInput) (*dynamodb.QueryOutput,
 		return &dynamodb.QueryOutput{}, nil
 	}
 
-	rangeKeyStart := input.KeyConditions[table.rangeKey].AttributeValueList[0].B
-	rangeKeyEnd := input.KeyConditions[table.rangeKey].AttributeValueList[1].B
+	rangeValueStart := input.KeyConditions[table.rangeKey].AttributeValueList[0].B
+	rangeValueEnd := input.KeyConditions[table.rangeKey].AttributeValueList[1].B
+
+	fmt.Printf("Lookup %s/%x -> %x\n", hashValue, rangeValueStart, rangeValueEnd)
 
 	i := sort.Search(len(items), func(i int) bool {
-		return bytes.Compare(items[i][table.rangeKey].B, rangeKeyStart) >= 0
+		return bytes.Compare(items[i][table.rangeKey].B, rangeValueStart) >= 0
 	})
 	if i >= len(items) {
 		return &dynamodb.QueryOutput{}, nil
 	}
 
 	j := sort.Search(len(items), func(i int) bool {
-		return bytes.Compare(items[i][table.rangeKey].B, rangeKeyEnd) >= 0
+		return bytes.Compare(items[i][table.rangeKey].B, rangeValueEnd) >= 0
 	})
 
 	result := make([]map[string]*dynamodb.AttributeValue, 0, j-i)

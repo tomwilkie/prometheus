@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -41,8 +42,6 @@ const (
 	hashKey          = "h"
 	rangeKey         = "r"
 	chunkKey         = "c"
-	minChunkID       = "0000000000000000"
-	maxChunkID       = "FFFFFFFFFFFFFFFF"
 	UserIDContextKey = "FrankensteinUserID" // TODO dedupe with storage/local
 
 	// See http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Limits.html.
@@ -364,7 +363,11 @@ func (c *AWSChunkStore) Get(ctx context.Context, from, through model.Time, match
 		}
 	}
 
-	return append(fromMemcache, fromS3...), nil
+	// TODO instead of doing this sort, propagate an index and assign chunks
+	// into the result based on that index.
+	chunks := append(fromMemcache, fromS3...)
+	sort.Sort(wire.ChunksByID(chunks))
+	return chunks, nil
 }
 
 func (c *AWSChunkStore) lookupChunks(userID string, from, through model.Time, matchers []*metric.LabelMatcher) ([]wire.Chunk, error) {
@@ -387,12 +390,12 @@ func (c *AWSChunkStore) lookupChunks(userID string, from, through model.Time, ma
 		go c.lookupChunksFor(userID, hour, metricName, matchers, incomingChunkSets, incomingErrors)
 	}
 
-	chunkSets := []wire.Chunk{}
+	chunks := []wire.Chunk{}
 	errors := []error{}
 	for i := 0; i < len(buckets); i++ {
 		select {
-		case chunkSet := <-incomingChunkSets:
-			chunkSets = append(chunkSets, chunkSet...)
+		case incoming := <-incomingChunkSets:
+			chunks = merge(chunks, incoming)
 		case err := <-incomingErrors:
 			errors = append(errors, err)
 		}
@@ -400,13 +403,13 @@ func (c *AWSChunkStore) lookupChunks(userID string, from, through model.Time, ma
 	if len(errors) > 0 {
 		return nil, errors[0]
 	}
-	return chunkSets, nil
+	return chunks, nil
 }
 
-func next(s model.LabelName) model.LabelName {
+func next(s string) string {
 	// TODO deal with overflows
 	l := len(s)
-	return s[:l-2] + model.LabelName(s[l-1]+1)
+	return s[:l-2] + string(s[l-1]+1)
 }
 
 func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName model.LabelValue, matchers []*metric.LabelMatcher, incomingChunkSets chan []wire.Chunk, incomingErrors chan error) {
@@ -416,11 +419,13 @@ func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName mo
 		hashValue := hashValue(userID, hour, metricName)
 		var rangeMinValue, rangeMaxValue []byte
 		if matcher.Type == metric.Equal {
-			rangeMinValue = rangeValue(matcher.Name, matcher.Value, minChunkID)
-			rangeMaxValue = rangeValue(matcher.Name, matcher.Value, maxChunkID)
+			nextValue := model.LabelValue(next(string(matcher.Value)))
+			rangeMinValue = rangeValue(matcher.Name, matcher.Value, "")
+			rangeMaxValue = rangeValue(matcher.Name, nextValue, "")
 		} else {
-			rangeMinValue = rangeValue(matcher.Name, "", minChunkID)
-			rangeMaxValue = rangeValue(next(matcher.Name), "", minChunkID)
+			nextLabel := model.LabelName(next(string(matcher.Name)))
+			rangeMinValue = rangeValue(matcher.Name, "", "")
+			rangeMaxValue = rangeValue(nextLabel, "", "")
 		}
 
 		var resp *dynamodb.QueryOutput
@@ -537,6 +542,31 @@ func (c *AWSChunkStore) fetchChunkData(userID string, chunkSet []wire.Chunk) ([]
 		return nil, errors[0]
 	}
 	return chunks, nil
+}
+
+func merge(a, b wire.ChunksByID) wire.ChunksByID {
+	result := make(wire.ChunksByID, 0, len(a)+len(b))
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		if a[i].ID < b[j].ID {
+			result = append(result, a[i])
+			i++
+		} else if a[i].ID > b[j].ID {
+			result = append(result, b[j])
+			j++
+		} else {
+			result = append(result, a[i])
+			i++
+			j++
+		}
+	}
+	for ; i < len(a); i++ {
+		result = append(result, a[i])
+	}
+	for ; j < len(b); j++ {
+		result = append(result, b[j])
+	}
+	return result
 }
 
 func nWayIntersect(sets [][]wire.Chunk) []wire.Chunk {

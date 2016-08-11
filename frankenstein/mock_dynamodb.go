@@ -17,11 +17,13 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 type mockDynamoDB struct {
+	mtx    sync.RWMutex
 	tables map[string]mockDynamoDBTable
 }
 
@@ -40,6 +42,9 @@ func newMockDynamoDB() *mockDynamoDB {
 }
 
 func (m *mockDynamoDB) CreateTable(input *dynamodb.CreateTableInput) (*dynamodb.CreateTableOutput, error) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
 	var hashKey, rangeKey string
 	for _, schemaElement := range input.KeySchema {
 		if *schemaElement.KeyType == "HASH" {
@@ -59,6 +64,9 @@ func (m *mockDynamoDB) CreateTable(input *dynamodb.CreateTableInput) (*dynamodb.
 }
 
 func (m *mockDynamoDB) ListTables(*dynamodb.ListTablesInput) (*dynamodb.ListTablesOutput, error) {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+
 	var tableNames []*string
 	for tableName, _ := range m.tables {
 		func(tableName string) {
@@ -71,6 +79,9 @@ func (m *mockDynamoDB) ListTables(*dynamodb.ListTablesInput) (*dynamodb.ListTabl
 }
 
 func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
 	for tableName, writeRequests := range input.RequestItems {
 		table, ok := m.tables[tableName]
 		if !ok {
@@ -101,6 +112,9 @@ func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dyn
 }
 
 func (m *mockDynamoDB) Query(input *dynamodb.QueryInput) (*dynamodb.QueryOutput, error) {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+
 	table, ok := m.tables[*input.TableName]
 	if !ok {
 		return nil, fmt.Errorf("table not found")

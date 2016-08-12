@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/prometheus/common/log"
 )
 
 type mockDynamoDB struct {
@@ -91,7 +92,7 @@ func (m *mockDynamoDB) BatchWriteItem(input *dynamodb.BatchWriteItemInput) (*dyn
 		for _, writeRequest := range writeRequests {
 			hashValue := *writeRequest.PutRequest.Item[table.hashKey].S
 			rangeValue := writeRequest.PutRequest.Item[table.rangeKey].B
-			fmt.Printf("Write %s/%x\n", hashValue, rangeValue)
+			log.Infof("Write %s/%x", hashValue, rangeValue)
 
 			items := table.items[hashValue]
 
@@ -134,13 +135,13 @@ func (m *mockDynamoDB) Query(input *dynamodb.QueryInput) (*dynamodb.QueryOutput,
 	var found []mockDynamoDBItem
 	rangeKeyCondition, ok := input.KeyConditions[table.rangeKey]
 	if !ok {
-		fmt.Printf("Lookup %s/* -> *\n", hashValue)
+		log.Infof("Lookup %s/* -> *", hashValue)
 		found = items
 	} else {
 		rangeValueStart := rangeKeyCondition.AttributeValueList[0].B
 		rangeValueEnd := rangeKeyCondition.AttributeValueList[1].B
 
-		fmt.Printf("Lookup %s/%x -> %x (%d)\n", hashValue, rangeValueStart, rangeValueEnd, len(items))
+		log.Infof("Lookup %s/%x -> %x (%d)", hashValue, rangeValueStart, rangeValueEnd, len(items))
 
 		i := sort.Search(len(items), func(i int) bool {
 			return bytes.Compare(items[i][table.rangeKey].B, rangeValueStart) >= 0
@@ -150,7 +151,7 @@ func (m *mockDynamoDB) Query(input *dynamodb.QueryInput) (*dynamodb.QueryOutput,
 			return bytes.Compare(items[i][table.rangeKey].B, rangeValueEnd) > 0
 		})
 
-		fmt.Printf("  found range [%d:%d]\n", i, j)
+		log.Infof("  found range [%d:%d]", i, j)
 		if i > len(items) || i == j {
 			return &dynamodb.QueryOutput{}, nil
 		}

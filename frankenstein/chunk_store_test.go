@@ -14,13 +14,13 @@
 package frankenstein
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
 	"golang.org/x/net/context"
 
@@ -101,8 +101,7 @@ func TestChunkStore(t *testing.T) {
 	}
 
 	test := func(name string, expect []wire.Chunk, matchers ...*metric.LabelMatcher) {
-		fmt.Println("")
-		fmt.Println(">>>", name)
+		log.Infof(">>> %s", name)
 		chunks, err := store.Get(ctx, now.Add(-time.Hour), now, matchers...)
 		if err != nil {
 			t.Fatal(err)

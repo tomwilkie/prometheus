@@ -14,6 +14,7 @@
 package frankenstein
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -37,14 +38,14 @@ func c(id string) wire.Chunk {
 
 func TestIntersect(t *testing.T) {
 	for _, tc := range []struct {
-		in   [][]wire.Chunk
-		want []wire.Chunk
+		in   []wire.ChunksByID
+		want wire.ChunksByID
 	}{
-		{nil, []wire.Chunk{}},
-		{[][]wire.Chunk{{c("a"), c("b"), c("c")}}, []wire.Chunk{c("a"), c("b"), c("c")}},
-		{[][]wire.Chunk{{c("a"), c("b"), c("c")}, {c("a"), c("c")}}, []wire.Chunk{c("a"), c("c")}},
-		{[][]wire.Chunk{{c("a"), c("b"), c("c")}, {c("a"), c("c")}, {c("b")}}, []wire.Chunk{}},
-		{[][]wire.Chunk{{c("a"), c("b"), c("c")}, {c("a"), c("c")}, {c("a")}}, []wire.Chunk{c("a")}},
+		{nil, wire.ChunksByID{}},
+		{[]wire.ChunksByID{{c("a"), c("b"), c("c")}}, []wire.Chunk{c("a"), c("b"), c("c")}},
+		{[]wire.ChunksByID{{c("a"), c("b"), c("c")}, {c("a"), c("c")}}, wire.ChunksByID{c("a"), c("c")}},
+		{[]wire.ChunksByID{{c("a"), c("b"), c("c")}, {c("a"), c("c")}, {c("b")}}, wire.ChunksByID{}},
+		{[]wire.ChunksByID{{c("a"), c("b"), c("c")}, {c("a"), c("c")}, {c("a")}}, wire.ChunksByID{c("a")}},
 	} {
 		have := nWayIntersect(tc.in)
 		if !reflect.DeepEqual(have, tc.want) {
@@ -77,7 +78,8 @@ func TestChunkStore(t *testing.T) {
 		Through: now,
 		Metric: model.Metric{
 			model.MetricNameLabel: "foo",
-			"bar": "baz",
+			"bar":  "baz",
+			"toms": "code",
 		},
 		Data: []byte{},
 	}
@@ -87,31 +89,49 @@ func TestChunkStore(t *testing.T) {
 		Through: now,
 		Metric: model.Metric{
 			model.MetricNameLabel: "foo",
-			"bar": "beep",
+			"bar":  "beep",
+			"toms": "code",
 		},
 		Data: []byte{},
 	}
 
 	err := store.Put(ctx, []wire.Chunk{chunk1, chunk2})
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Fatal(err)
 	}
 
-	nameMatcher, err := metric.NewLabelMatcher(metric.Equal, model.MetricNameLabel, "foo")
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	chunks, err := store.Get(ctx, now.Add(-time.Hour), now, nameMatcher)
-	if err != nil {
-		t.Errorf("%v", err)
+	test := func(name string, expect []wire.Chunk, matchers ...*metric.LabelMatcher) {
+		fmt.Println("")
+		fmt.Println(">>>", name)
+		chunks, err := store.Get(ctx, now.Add(-time.Hour), now, matchers...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(expect, chunks) {
+			t.Fatalf("wrong chunks - " + diff(expect, chunks))
+		}
 	}
 
-	if !reflect.DeepEqual(chunks, []wire.Chunk{chunk1, chunk2}) {
-		t.Errorf("wrong chunks - " + Diff(chunks, []wire.Chunk{chunk1, chunk2}))
-	}
+	nameMatcher := mustNewLabelMatcher(metric.Equal, model.MetricNameLabel, "foo")
+
+	test("Just name label", []wire.Chunk{chunk1, chunk2}, nameMatcher)
+	test("Equal", []wire.Chunk{chunk1}, nameMatcher, mustNewLabelMatcher(metric.Equal, "bar", "baz"))
+	test("Not equal", []wire.Chunk{chunk2}, nameMatcher, mustNewLabelMatcher(metric.NotEqual, "bar", "baz"))
+	test("Regex match", []wire.Chunk{chunk1, chunk2}, nameMatcher, mustNewLabelMatcher(metric.RegexMatch, "bar", "beep|baz"))
+	test("Multiple matchers", []wire.Chunk{chunk1, chunk2}, nameMatcher, mustNewLabelMatcher(metric.Equal, "toms", "code"), mustNewLabelMatcher(metric.RegexMatch, "bar", "beep|baz"))
+	test("Multiple matchers II", []wire.Chunk{chunk1}, nameMatcher, mustNewLabelMatcher(metric.Equal, "toms", "code"), mustNewLabelMatcher(metric.Equal, "bar", "baz"))
 }
 
-func Diff(want, have interface{}) string {
+func mustNewLabelMatcher(matchType metric.MatchType, name model.LabelName, value model.LabelValue) *metric.LabelMatcher {
+	matcher, err := metric.NewLabelMatcher(matchType, name, value)
+	if err != nil {
+		panic(err)
+	}
+	return matcher
+}
+
+func diff(want, have interface{}) string {
 	text, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
 		A:        difflib.SplitLines(spew.Sdump(want)),
 		B:        difflib.SplitLines(spew.Sdump(have)),

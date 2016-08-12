@@ -120,30 +120,45 @@ func (m *mockDynamoDB) Query(input *dynamodb.QueryInput) (*dynamodb.QueryOutput,
 		return nil, fmt.Errorf("table not found")
 	}
 
-	hashValue := *input.KeyConditions[table.hashKey].AttributeValueList[0].S
+	hashValueCondition, ok := input.KeyConditions[table.hashKey]
+	if !ok {
+		return &dynamodb.QueryOutput{}, fmt.Errorf("must specify hash value condition")
+	}
+
+	hashValue := *hashValueCondition.AttributeValueList[0].S
 	items, ok := table.items[hashValue]
 	if !ok {
 		return &dynamodb.QueryOutput{}, nil
 	}
 
-	rangeValueStart := input.KeyConditions[table.rangeKey].AttributeValueList[0].B
-	rangeValueEnd := input.KeyConditions[table.rangeKey].AttributeValueList[1].B
+	var found []mockDynamoDBItem
+	rangeKeyCondition, ok := input.KeyConditions[table.rangeKey]
+	if !ok {
+		fmt.Printf("Lookup %s/* -> *\n", hashValue)
+		found = items
+	} else {
+		rangeValueStart := rangeKeyCondition.AttributeValueList[0].B
+		rangeValueEnd := rangeKeyCondition.AttributeValueList[1].B
 
-	fmt.Printf("Lookup %s/%x -> %x\n", hashValue, rangeValueStart, rangeValueEnd)
+		fmt.Printf("Lookup %s/%x -> %x (%d)\n", hashValue, rangeValueStart, rangeValueEnd, len(items))
 
-	i := sort.Search(len(items), func(i int) bool {
-		return bytes.Compare(items[i][table.rangeKey].B, rangeValueStart) >= 0
-	})
-	if i >= len(items) {
-		return &dynamodb.QueryOutput{}, nil
+		i := sort.Search(len(items), func(i int) bool {
+			return bytes.Compare(items[i][table.rangeKey].B, rangeValueStart) >= 0
+		})
+
+		j := sort.Search(len(items), func(i int) bool {
+			return bytes.Compare(items[i][table.rangeKey].B, rangeValueEnd) > 0
+		})
+
+		fmt.Printf("  found range [%d:%d]\n", i, j)
+		if i > len(items) || i == j {
+			return &dynamodb.QueryOutput{}, nil
+		}
+		found = items[i:j]
 	}
 
-	j := sort.Search(len(items), func(i int) bool {
-		return bytes.Compare(items[i][table.rangeKey].B, rangeValueEnd) >= 0
-	})
-
-	result := make([]map[string]*dynamodb.AttributeValue, 0, j-i)
-	for _, item := range items[i : j-i] {
+	result := make([]map[string]*dynamodb.AttributeValue, 0, len(found))
+	for _, item := range found {
 		result = append(result, item)
 	}
 

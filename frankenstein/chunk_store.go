@@ -278,6 +278,7 @@ func (c *AWSChunkStore) Put(ctx context.Context, chunks []wire.Chunk) error {
 		if !ok {
 			return fmt.Errorf("no MetricNameLabel for chunk")
 		}
+
 		// TODO compression
 		chunkValue, err := json.Marshal(chunk)
 		if err != nil {
@@ -287,6 +288,10 @@ func (c *AWSChunkStore) Put(ctx context.Context, chunks []wire.Chunk) error {
 		for _, hour := range bigBuckets(chunk.From, chunk.Through) {
 			hashValue := hashValue(userID, hour, metricName)
 			for label, value := range chunk.Metric {
+				if label == model.MetricNameLabel {
+					continue
+				}
+
 				rangeValue := rangeValue(label, value, chunk.ID)
 				writeReqs = append(writeReqs, &dynamodb.WriteRequest{
 					PutRequest: &dynamodb.PutRequest{
@@ -370,38 +375,37 @@ func (c *AWSChunkStore) Get(ctx context.Context, from, through model.Time, match
 	return chunks, nil
 }
 
-func (c *AWSChunkStore) lookupChunks(userID string, from, through model.Time, matchers []*metric.LabelMatcher) ([]wire.Chunk, error) {
-	var metricName model.LabelValue
-	for _, matcher := range matchers {
-		if matcher.Name == model.MetricNameLabel && matcher.Type == metric.Equal {
-			metricName = matcher.Value
+func extractMetricName(matchers []*metric.LabelMatcher) (model.LabelValue, []*metric.LabelMatcher, error) {
+	for i, matcher := range matchers {
+		if matcher.Name != model.MetricNameLabel {
 			continue
 		}
-	}
-	if metricName == "" {
-		return nil, fmt.Errorf("no matcher for MetricNameLabel")
-	}
-
-	incomingChunkSets := make(chan []wire.Chunk)
-	incomingErrors := make(chan error)
-	buckets := bigBuckets(from, through)
-	for _, hour := range buckets {
-		// TODO: probably better to abort everything using contexts on the first error.
-		go c.lookupChunksFor(userID, hour, metricName, matchers, incomingChunkSets, incomingErrors)
-	}
-
-	chunks := []wire.Chunk{}
-	errors := []error{}
-	for i := 0; i < len(buckets); i++ {
-		select {
-		case incoming := <-incomingChunkSets:
-			chunks = merge(chunks, incoming)
-		case err := <-incomingErrors:
-			errors = append(errors, err)
+		if matcher.Type != metric.Equal {
+			return "", nil, fmt.Errorf("must have equality matcher for MetricNameLabel")
 		}
+		metricName := matcher.Value
+		matchers = matchers[:i+copy(matchers[i:], matchers[i+1:])]
+		return metricName, matchers, nil
 	}
-	if len(errors) > 0 {
-		return nil, errors[0]
+	return "", nil, fmt.Errorf("no matcher for MetricNameLabel")
+}
+
+func (c *AWSChunkStore) lookupChunks(userID string, from, through model.Time, matchers []*metric.LabelMatcher) ([]wire.Chunk, error) {
+	metricName, matchers, err := extractMetricName(matchers)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: parallelise
+	buckets := bigBuckets(from, through)
+	chunks := []wire.Chunk{}
+	for _, hour := range buckets {
+		incoming, err := c.lookupChunksFor(userID, hour, metricName, matchers)
+		if err != nil {
+			return nil, err
+		} else {
+			chunks = merge(chunks, incoming)
+		}
 	}
 	return chunks, nil
 }
@@ -409,14 +413,69 @@ func (c *AWSChunkStore) lookupChunks(userID string, from, through model.Time, ma
 func next(s string) string {
 	// TODO deal with overflows
 	l := len(s)
-	return s[:l-2] + string(s[l-1]+1)
+	result := s[:l-1] + string(s[l-1]+1)
+	return result
 }
 
-func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName model.LabelValue, matchers []*metric.LabelMatcher, incomingChunkSets chan []wire.Chunk, incomingErrors chan error) {
-	var chunkSets [][]wire.Chunk
-	for _, matcher := range matchers {
+func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName model.LabelValue, matchers []*metric.LabelMatcher) ([]wire.Chunk, error) {
+	hashValue := hashValue(userID, hour, metricName)
 
-		hashValue := hashValue(userID, hour, metricName)
+	if len(matchers) == 0 {
+		var resp *dynamodb.QueryOutput
+		err := timeRequest("Query", dynamoRequestDuration, func() error {
+			var err error
+			resp, err = c.dynamodb.Query(&dynamodb.QueryInput{
+				TableName: aws.String(c.tableName),
+				KeyConditions: map[string]*dynamodb.Condition{
+					hashKey: {
+						AttributeValueList: []*dynamodb.AttributeValue{
+							{S: aws.String(hashValue)},
+						},
+						ComparisonOperator: aws.String("EQ"),
+					},
+				},
+				ReturnConsumedCapacity: aws.String(dynamodb.ReturnConsumedCapacityTotal),
+			})
+			return err
+		})
+		if resp.ConsumedCapacity != nil {
+			dynamoConsumedCapacity.WithLabelValues("Query").
+				Add(float64(*resp.ConsumedCapacity.CapacityUnits))
+		}
+
+		chunkSet := []wire.Chunk{}
+		for _, item := range resp.Items {
+			rangeValue := item[rangeKey].B
+			if rangeValue == nil {
+				log.Errorf("Invalid item: %v", item)
+				return nil, err
+			}
+			_, _, chunkID, err := parseRangeValue(rangeValue)
+			if err != nil {
+				log.Errorf("Invalid item: %v", item)
+				return nil, err
+			}
+			chunkValue := item[chunkKey].B
+			if rangeValue == nil {
+				log.Errorf("Invalid item: %v", item)
+				return nil, err
+			}
+			chunk := wire.Chunk{
+				ID: chunkID,
+			}
+			if err := json.Unmarshal(chunkValue, &chunk); err != nil {
+				log.Errorf("Invalid item: %v", item)
+				return nil, err
+			}
+			chunkSet = append(chunkSet, chunk)
+		}
+		sort.Sort(wire.ChunksByID(chunkSet))
+		chunkSet = unique(chunkSet)
+		return chunkSet, nil
+	}
+
+	var chunkSets []wire.ChunksByID
+	for _, matcher := range matchers {
 		var rangeMinValue, rangeMaxValue []byte
 		if matcher.Type == metric.Equal {
 			nextValue := model.LabelValue(next(string(matcher.Value)))
@@ -458,46 +517,43 @@ func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName mo
 		}
 		if err != nil {
 			log.Errorf("Error querying DynamoDB: %v", err)
-			incomingErrors <- err
-			return
+			return nil, err
 		}
 
-		chunkSet := []wire.Chunk{}
+		chunkSet := wire.ChunksByID{}
 		for _, item := range resp.Items {
 			rangeValue := item[rangeKey].B
 			if rangeValue == nil {
 				log.Errorf("Invalid item: %v", item)
-				incomingErrors <- err
-				return
+				return nil, err
 			}
 			label, value, chunkID, err := parseRangeValue(rangeValue)
 			if err != nil {
 				log.Errorf("Invalid item: %v", item)
-				incomingErrors <- err
-				return
-			}
-			if label != matcher.Name || !matcher.Match(value) {
-				continue
+				return nil, err
 			}
 			chunkValue := item[chunkKey].B
 			if rangeValue == nil {
 				log.Errorf("Invalid item: %v", item)
-				incomingErrors <- err
-				return
+				return nil, err
 			}
 			chunk := wire.Chunk{
 				ID: chunkID,
 			}
 			if err := json.Unmarshal(chunkValue, &chunk); err != nil {
 				log.Errorf("Invalid item: %v", item)
-				incomingErrors <- err
-				return
+				return nil, err
+			}
+			if label != matcher.Name || !matcher.Match(value) {
+				log.Debugf("Dropping unexpected", chunk.Metric)
+				continue
 			}
 			chunkSet = append(chunkSet, chunk)
 		}
+		sort.Sort(wire.ChunksByID(chunkSet))
 		chunkSets = append(chunkSets, chunkSet)
 	}
-	incomingChunkSets <- nWayIntersect(chunkSets)
+	return nWayIntersect(chunkSets), nil
 }
 
 func (c *AWSChunkStore) fetchChunkData(userID string, chunkSet []wire.Chunk) ([]wire.Chunk, error) {
@@ -544,6 +600,29 @@ func (c *AWSChunkStore) fetchChunkData(userID string, chunkSet []wire.Chunk) ([]
 	return chunks, nil
 }
 
+// unique will remove duplicates from the input
+func unique(cs wire.ChunksByID) wire.ChunksByID {
+	if len(cs) == 0 {
+		return nil
+	}
+
+	result := make(wire.ChunksByID, 1, len(cs))
+	result[0] = cs[0]
+	i, j := 0, 1
+	for j < len(cs) {
+		if result[i].ID == cs[j].ID {
+			j++
+			continue
+		}
+		result = append(result, cs[j])
+		i++
+		j++
+	}
+	return result
+}
+
+// merge will merge & dedupe two list of chunks.
+// list musts be sorted and not container dupes.
 func merge(a, b wire.ChunksByID) wire.ChunksByID {
 	result := make(wire.ChunksByID, 0, len(a)+len(b))
 	i, j := 0, 0
@@ -569,11 +648,12 @@ func merge(a, b wire.ChunksByID) wire.ChunksByID {
 	return result
 }
 
-func nWayIntersect(sets [][]wire.Chunk) []wire.Chunk {
+// nWayIntersect will interesct n sorted lists of chunks.
+func nWayIntersect(sets []wire.ChunksByID) wire.ChunksByID {
 	l := len(sets)
 	switch l {
 	case 0:
-		return []wire.Chunk{}
+		return wire.ChunksByID{}
 	case 1:
 		return sets[0]
 	case 2:
@@ -600,6 +680,6 @@ func nWayIntersect(sets [][]wire.Chunk) []wire.Chunk {
 			left  = nWayIntersect(sets[:split])
 			right = nWayIntersect(sets[split:])
 		)
-		return nWayIntersect([][]wire.Chunk{left, right})
+		return nWayIntersect([]wire.ChunksByID{left, right})
 	}
 }

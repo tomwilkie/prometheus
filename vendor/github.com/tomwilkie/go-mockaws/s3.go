@@ -18,7 +18,7 @@ type mockS3Bucket struct {
 	objects map[string][]byte
 }
 
-// NewMockS3 returns a new MockS£
+// NewMockS3 returns a new MockS3
 func NewMockS3() *MockS3 {
 	return &MockS3{
 		buckets: map[string]*mockS3Bucket{},

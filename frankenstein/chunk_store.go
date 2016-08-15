@@ -59,6 +59,11 @@ var (
 		Name:      "dynamo_consumed_capacity_total",
 		Help:      "The capacity units consumed by operation.",
 	}, []string{"operation"})
+	droppedMatches = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "prometheus",
+		Name:      "dropper_matches_total",
+		Help:      "The number chunks fetched but later dropped for not matching.",
+	})
 	s3RequestDuration = prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace: "prometheus",
 		Name:      "s3_request_duration_seconds",
@@ -69,6 +74,7 @@ var (
 func init() {
 	prometheus.MustRegister(dynamoRequestDuration)
 	prometheus.MustRegister(dynamoConsumedCapacity)
+	prometheus.MustRegister(droppedMatches)
 	prometheus.MustRegister(s3RequestDuration)
 }
 
@@ -433,7 +439,7 @@ func next(s string) string {
 
 func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName model.LabelValue, matchers []*metric.LabelMatcher) (wire.ChunksByID, error) {
 	if len(matchers) == 0 {
-		return c.lookupChunkForMeticName(userID, hour, metricName)
+		return c.lookupChunksForMetricName(userID, hour, metricName)
 	}
 
 	incomingChunkSets := make(chan wire.ChunksByID)
@@ -463,7 +469,7 @@ func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName mo
 	return nWayIntersect(chunkSets), lastErr
 }
 
-func (c *AWSChunkStore) lookupChunkForMeticName(userID string, hour int64, metricName model.LabelValue) (wire.ChunksByID, error) {
+func (c *AWSChunkStore) lookupChunksForMetricName(userID string, hour int64, metricName model.LabelValue) (wire.ChunksByID, error) {
 	hashValue := hashValue(userID, hour, metricName)
 
 	var resp *dynamodb.QueryOutput
@@ -487,6 +493,9 @@ func (c *AWSChunkStore) lookupChunkForMeticName(userID string, hour int64, metri
 		dynamoConsumedCapacity.WithLabelValues("Query").
 			Add(float64(*resp.ConsumedCapacity.CapacityUnits))
 	}
+	if err != nil {
+		return nil, err
+	}
 
 	chunkSet := []wire.Chunk{}
 	for _, item := range resp.Items {
@@ -501,7 +510,7 @@ func (c *AWSChunkStore) lookupChunkForMeticName(userID string, hour int64, metri
 			return nil, err
 		}
 		chunkValue := item[chunkKey].B
-		if rangeValue == nil {
+		if chunkValue == nil {
 			log.Errorf("Invalid item: %v", item)
 			return nil, err
 		}
@@ -578,7 +587,7 @@ func (c *AWSChunkStore) lookupChunksForMatcher(userID string, hour int64, metric
 			return nil, err
 		}
 		chunkValue := item[chunkKey].B
-		if rangeValue == nil {
+		if chunkValue == nil {
 			log.Errorf("Invalid item: %v", item)
 			return nil, err
 		}
@@ -591,6 +600,7 @@ func (c *AWSChunkStore) lookupChunksForMatcher(userID string, hour int64, metric
 		}
 		if label != matcher.Name || !matcher.Match(value) {
 			log.Debugf("Dropping unexpected", chunk.Metric)
+			droppedMatches.Add(1)
 			continue
 		}
 		chunkSet = append(chunkSet, chunk)
@@ -664,8 +674,8 @@ func unique(cs wire.ChunksByID) wire.ChunksByID {
 	return result
 }
 
-// merge will merge & dedupe two list of chunks.
-// list musts be sorted and not container dupes.
+// merge will merge & dedupe two lists of chunks.
+// list musts be sorted and not contain dupes.
 func merge(a, b wire.ChunksByID) wire.ChunksByID {
 	result := make(wire.ChunksByID, 0, len(a)+len(b))
 	i, j := 0, 0

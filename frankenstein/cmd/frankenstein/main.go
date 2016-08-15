@@ -70,7 +70,7 @@ func main() {
 	flag.DurationVar(&memcachedTimeout, "memcached.timeout", 100*time.Millisecond, "Maximum time to wait before giving up on memcached requests.")
 	flag.DurationVar(&memcachedExpiration, "memcached.expiration", 2*15*time.Second, "How long chunks stay in the memcache.")
 	flag.StringVar(&memcachedService, "memcached.service", "memcached", "SRV service used to discover memcache servers.")
-	flag.DurationVar(&remoteTimeout, "remote.timeout", 100*time.Millisecond, "Timeout for downstream ingestors.")
+	flag.DurationVar(&remoteTimeout, "remote.timeout", 5*time.Seconds, "Timeout for downstream ingestors.")
 	flag.Parse()
 
 	consul, err := frankenstein.NewConsulClient(consulHost)

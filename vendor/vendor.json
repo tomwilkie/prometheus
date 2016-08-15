@@ -389,6 +389,12 @@
 			"revisionTime": "2016-06-29T10:12:33Z"
 		},
 		{
+			"checksumSHA1": "z0Deeu57VR4UZYXWwfeaZ4uOOyE=",
+			"path": "github.com/tomwilkie/go-mockaws",
+			"revision": "de2d707ad48c5581bd43da8dcdf4c46e6ebc14cb",
+			"revisionTime": "2016-08-15T14:12:54Z"
+		},
+		{
 			"path": "github.com/vaughan0/go-ini",
 			"revision": "a98ad7ee00ec53921f08832bc06ecf7fd600e6a1",
 			"revisionTime": "2013-09-23T16:52:12+02:00"

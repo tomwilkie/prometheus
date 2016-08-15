@@ -61,8 +61,8 @@ var (
 	}, []string{"operation"})
 	droppedMatches = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "prometheus",
-		Name:      "dropper_matches_total",
-		Help:      "The number chunks fetched but later dropped for not matching.",
+		Name:      "dropped_matches_total",
+		Help:      "The number of chunks fetched but later dropped for not matching.",
 	})
 	s3RequestDuration = prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace: "prometheus",

@@ -3,7 +3,6 @@
 Design Doc: https://docs.google.com/document/d/1C7yhMnb1x2sfeoe45f4mnnKConvroWhJ8KQZwIHJOuw/edit#heading=h.f7lkb8wswewc
 
     GOOS=linux DOCKER_IMAGE_TAG=latest make build docker docker-frank
-    ./frankenstein/run.sh
 
 TODO list
 - chunk id generation

@@ -6,14 +6,10 @@ Design Doc: https://docs.google.com/document/d/1C7yhMnb1x2sfeoe45f4mnnKConvroWhJ
     ./frankenstein/run.sh
 
 TODO list
-- query support in ingester
 - chunk id generation
 - parallelise chunk puts
-- start testing with more than one ingester
 - commit log in the ingester
-- safe ingester shutdown
 - separate query service?
-- prom ui
 
 ## Retrieval
 

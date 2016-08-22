@@ -154,3 +154,13 @@ func (m *MockDynamoDB) Query(input *dynamodb.QueryInput) (*dynamodb.QueryOutput,
 		Items: result,
 	}, nil
 }
+
+func (m *MockDynamoDB) QueryPages(input *dynamodb.QueryInput, f func(p *dynamodb.QueryOutput, lastPage bool) bool) error {
+	output, err := m.Query(input)
+	if err != nil {
+		return err
+	}
+
+	f(output, true)
+	return nil
+}

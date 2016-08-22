@@ -485,9 +485,11 @@ func (c *AWSChunkStore) lookupChunksForMetricName(userID string, hour int64, met
 
 	chunkSet := wire.ChunksByID{}
 	var processingError error
-	if err := c.dynamodb.QueryPages(input, func(resp *dynamodb.QueryOutput, lastPage bool) (shouldContinue bool) {
-		processingError = processResponse(resp, &chunkSet, nil)
-		return processingError != nil && !lastPage
+	if err := timeRequest("QueryPages", dynamoRequestDuration, func() error {
+		return c.dynamodb.QueryPages(input, func(resp *dynamodb.QueryOutput, lastPage bool) (shouldContinue bool) {
+			processingError = processResponse(resp, &chunkSet, nil)
+			return processingError != nil && !lastPage
+		})
 	}); err != nil {
 		log.Errorf("Error querying DynamoDB: %v", err)
 		return nil, err
@@ -536,9 +538,11 @@ func (c *AWSChunkStore) lookupChunksForMatcher(userID string, hour int64, metric
 
 	chunkSet := wire.ChunksByID{}
 	var processingError error
-	if err := c.dynamodb.QueryPages(input, func(resp *dynamodb.QueryOutput, lastPage bool) (shouldContinue bool) {
-		processingError = processResponse(resp, &chunkSet, matcher)
-		return processingError != nil && !lastPage
+	if err := timeRequest("QueryPages", dynamoRequestDuration, func() error {
+		return c.dynamodb.QueryPages(input, func(resp *dynamodb.QueryOutput, lastPage bool) (shouldContinue bool) {
+			processingError = processResponse(resp, &chunkSet, matcher)
+			return processingError != nil && !lastPage
+		})
 	}); err != nil {
 		log.Errorf("Error querying DynamoDB: %v", err)
 		return nil, err

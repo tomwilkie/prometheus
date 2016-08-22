@@ -164,7 +164,7 @@ type dynamodbClient interface {
 	CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTableOutput, error)
 	ListTables(*dynamodb.ListTablesInput) (*dynamodb.ListTablesOutput, error)
 	BatchWriteItem(*dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error)
-	Query(*dynamodb.QueryInput) (*dynamodb.QueryOutput, error)
+	QueryPages(*dynamodb.QueryInput, func(p *dynamodb.QueryOutput, lastPage bool) bool) error
 }
 
 type s3Client interface {
@@ -470,58 +470,32 @@ func (c *AWSChunkStore) lookupChunksFor(userID string, hour int64, metricName mo
 
 func (c *AWSChunkStore) lookupChunksForMetricName(userID string, hour int64, metricName model.LabelValue) (wire.ChunksByID, error) {
 	hashValue := hashValue(userID, hour, metricName)
-
-	var resp *dynamodb.QueryOutput
-	err := timeRequest("Query", dynamoRequestDuration, func() error {
-		var err error
-		resp, err = c.dynamodb.Query(&dynamodb.QueryInput{
-			TableName: aws.String(c.tableName),
-			KeyConditions: map[string]*dynamodb.Condition{
-				hashKey: {
-					AttributeValueList: []*dynamodb.AttributeValue{
-						{S: aws.String(hashValue)},
-					},
-					ComparisonOperator: aws.String("EQ"),
+	input := &dynamodb.QueryInput{
+		TableName: aws.String(c.tableName),
+		KeyConditions: map[string]*dynamodb.Condition{
+			hashKey: {
+				AttributeValueList: []*dynamodb.AttributeValue{
+					{S: aws.String(hashValue)},
 				},
+				ComparisonOperator: aws.String("EQ"),
 			},
-			ReturnConsumedCapacity: aws.String(dynamodb.ReturnConsumedCapacityTotal),
-		})
-		return err
-	})
-	if resp.ConsumedCapacity != nil {
-		dynamoConsumedCapacity.WithLabelValues("Query").
-			Add(float64(*resp.ConsumedCapacity.CapacityUnits))
-	}
-	if err != nil {
-		return nil, err
+		},
+		ReturnConsumedCapacity: aws.String(dynamodb.ReturnConsumedCapacityTotal),
 	}
 
-	chunkSet := []wire.Chunk{}
-	for _, item := range resp.Items {
-		rangeValue := item[rangeKey].B
-		if rangeValue == nil {
-			log.Errorf("Invalid item: %v", item)
-			return nil, err
-		}
-		_, _, chunkID, err := parseRangeValue(rangeValue)
-		if err != nil {
-			log.Errorf("Invalid item: %v", item)
-			return nil, err
-		}
-		chunkValue := item[chunkKey].B
-		if chunkValue == nil {
-			log.Errorf("Invalid item: %v", item)
-			return nil, err
-		}
-		chunk := wire.Chunk{
-			ID: chunkID,
-		}
-		if err := json.Unmarshal(chunkValue, &chunk); err != nil {
-			log.Errorf("Invalid item: %v", item)
-			return nil, err
-		}
-		chunkSet = append(chunkSet, chunk)
+	chunkSet := wire.ChunksByID{}
+	var processingError error
+	if err := c.dynamodb.QueryPages(input, func(resp *dynamodb.QueryOutput, lastPage bool) (shouldContinue bool) {
+		processingError = processResponse(resp, &chunkSet, nil)
+		return processingError != nil && !lastPage
+	}); err != nil {
+		log.Errorf("Error querying DynamoDB: %v", err)
+		return nil, err
+	} else if processingError != nil {
+		log.Errorf("Error processing DynamoDB response: %v", processingError)
+		return nil, processingError
 	}
+
 	sort.Sort(wire.ChunksByID(chunkSet))
 	chunkSet = unique(chunkSet)
 	return chunkSet, nil
@@ -540,72 +514,76 @@ func (c *AWSChunkStore) lookupChunksForMatcher(userID string, hour int64, metric
 		rangeMaxValue = rangeValue(nextLabel, "", "")
 	}
 
-	var resp *dynamodb.QueryOutput
-	err := timeRequest("Query", dynamoRequestDuration, func() error {
-		var err error
-		resp, err = c.dynamodb.Query(&dynamodb.QueryInput{
-			TableName: aws.String(c.tableName),
-			KeyConditions: map[string]*dynamodb.Condition{
-				hashKey: {
-					AttributeValueList: []*dynamodb.AttributeValue{
-						{S: aws.String(hashValue)},
-					},
-					ComparisonOperator: aws.String("EQ"),
+	input := &dynamodb.QueryInput{
+		TableName: aws.String(c.tableName),
+		KeyConditions: map[string]*dynamodb.Condition{
+			hashKey: {
+				AttributeValueList: []*dynamodb.AttributeValue{
+					{S: aws.String(hashValue)},
 				},
-				rangeKey: {
-					AttributeValueList: []*dynamodb.AttributeValue{
-						{B: rangeMinValue},
-						{B: rangeMaxValue},
-					},
-					ComparisonOperator: aws.String("BETWEEN"),
-				},
+				ComparisonOperator: aws.String("EQ"),
 			},
-			ReturnConsumedCapacity: aws.String(dynamodb.ReturnConsumedCapacityTotal),
-		})
-		return err
-	})
+			rangeKey: {
+				AttributeValueList: []*dynamodb.AttributeValue{
+					{B: rangeMinValue},
+					{B: rangeMaxValue},
+				},
+				ComparisonOperator: aws.String("BETWEEN"),
+			},
+		},
+		ReturnConsumedCapacity: aws.String(dynamodb.ReturnConsumedCapacityTotal),
+	}
+
+	chunkSet := wire.ChunksByID{}
+	var processingError error
+	if err := c.dynamodb.QueryPages(input, func(resp *dynamodb.QueryOutput, lastPage bool) (shouldContinue bool) {
+		processingError = processResponse(resp, &chunkSet, matcher)
+		return processingError != nil && !lastPage
+	}); err != nil {
+		log.Errorf("Error querying DynamoDB: %v", err)
+		return nil, err
+	} else if processingError != nil {
+		log.Errorf("Error processing DynamoDB response: %v", processingError)
+		return nil, processingError
+	}
+
+	sort.Sort(wire.ChunksByID(chunkSet))
+	return chunkSet, nil
+}
+
+func processResponse(resp *dynamodb.QueryOutput, chunkSet *wire.ChunksByID, matcher *metric.LabelMatcher) error {
 	if resp.ConsumedCapacity != nil {
 		dynamoConsumedCapacity.WithLabelValues("Query").
 			Add(float64(*resp.ConsumedCapacity.CapacityUnits))
 	}
-	if err != nil {
-		log.Errorf("Error querying DynamoDB: %v", err)
-		return nil, err
-	}
 
-	chunkSet := wire.ChunksByID{}
 	for _, item := range resp.Items {
 		rangeValue := item[rangeKey].B
 		if rangeValue == nil {
-			log.Errorf("Invalid item: %v", item)
-			return nil, err
+			return fmt.Errorf("invalid item: %v", item)
 		}
 		label, value, chunkID, err := parseRangeValue(rangeValue)
 		if err != nil {
-			log.Errorf("Invalid item: %v", item)
-			return nil, err
+			return err
 		}
 		chunkValue := item[chunkKey].B
 		if chunkValue == nil {
-			log.Errorf("Invalid item: %v", item)
-			return nil, err
+			return fmt.Errorf("invalid item: %v", item)
 		}
 		chunk := wire.Chunk{
 			ID: chunkID,
 		}
 		if err := json.Unmarshal(chunkValue, &chunk); err != nil {
-			log.Errorf("Invalid item: %v", item)
-			return nil, err
+			return err
 		}
-		if label != matcher.Name || !matcher.Match(value) {
+		if matcher != nil && (label != matcher.Name || !matcher.Match(value)) {
 			log.Debugf("Dropping unexpected", chunk.Metric)
 			droppedMatches.Add(1)
 			continue
 		}
-		chunkSet = append(chunkSet, chunk)
+		*chunkSet = append(*chunkSet, chunk)
 	}
-	sort.Sort(wire.ChunksByID(chunkSet))
-	return chunkSet, nil
+	return nil
 }
 
 func (c *AWSChunkStore) fetchChunkData(userID string, chunkSet []wire.Chunk) ([]wire.Chunk, error) {

@@ -49,8 +49,7 @@ type Ingester struct {
 
 	ingestedSamples    prometheus.Counter
 	discardedSamples   *prometheus.CounterVec
-	storedChunks       prometheus.Counter
-	chunkSizes         prometheus.Histogram
+	chunkUtilization   prometheus.Histogram
 	chunkStoreFailures prometheus.Counter
 	queries            prometheus.Counter
 	queriedSamples     prometheus.Counter
@@ -104,18 +103,12 @@ func NewIngester(cfg IngesterConfig, chunkStore ChunkStore) (*Ingester, error) {
 			},
 			[]string{discardReasonLabel},
 		),
-		storedChunks: prometheus.NewCounter(prometheus.CounterOpts{
+		chunkUtilization: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
-			Name:      "stored_chunks_total",
-			Help:      "The total number of chunks sent to the chunk store.",
-		}),
-		chunkSizes: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "chunk_size_bytes",
-			Help:      "Distribution of stored chunk sizes",
-			Buckets:   prometheus.ExponentialBuckets(64, 2.0, 10),
+			Name:      "chunk_utlization",
+			Help:      "Distribution of stored chunk utilization",
+			Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
 		}),
 		chunkStoreFailures: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
@@ -439,7 +432,6 @@ func (i *Ingester) flushSeries(ctx context.Context, u *userState, fp model.Finge
 		i.chunkStoreFailures.Add(float64(len(chunks)))
 		return err
 	}
-	i.storedChunks.Add(float64(len(chunks)))
 
 	// now remove the chunks
 	u.fpLocker.Lock(fp)
@@ -460,7 +452,7 @@ func (i *Ingester) flushChunks(ctx context.Context, fp model.Fingerprint, metric
 			return err
 		}
 
-		i.chunkSizes.Observe(float64(chunk.c.size()))
+		i.chunkUtilization.Observe(chunk.c.utilization())
 
 		wireChunks = append(wireChunks, wire.Chunk{
 			ID:      fmt.Sprintf("%d:%d:%d", fp, chunk.chunkFirstTime, chunk.chunkLastTime),
@@ -485,8 +477,7 @@ func (i *Ingester) Describe(ch chan<- *prometheus.Desc) {
 	ch <- memoryUsersDesc
 	ch <- i.ingestedSamples.Desc()
 	i.discardedSamples.Describe(ch)
-	ch <- i.storedChunks.Desc()
-	ch <- i.chunkSizes.Desc()
+	ch <- i.chunkUtilization.Desc()
 	ch <- i.chunkStoreFailures.Desc()
 	ch <- i.queries.Desc()
 	ch <- i.queriedSamples.Desc()
@@ -515,8 +506,7 @@ func (i *Ingester) Collect(ch chan<- prometheus.Metric) {
 	)
 	ch <- i.ingestedSamples
 	i.discardedSamples.Collect(ch)
-	ch <- i.storedChunks
-	ch <- i.chunkSizes
+	ch <- i.chunkUtilization
 	ch <- i.chunkStoreFailures
 	ch <- i.queries
 	ch <- i.queriedSamples

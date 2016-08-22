@@ -424,8 +424,8 @@ func (c varbitChunk) closed() bool {
 	return c[varbitFlagOffset] > 0x7F // Most significant bit set.
 }
 
-func (c varbitChunk) size() int {
-	return int(c.nextSampleOffset())
+func (c varbitChunk) utilization() float64 {
+	return float64(c.nextSampleOffset()) / float64(cap(c))
 }
 
 func (c varbitChunk) zeroDDTRepeats() (repeats uint64, offset uint16) {

@@ -258,8 +258,8 @@ func (c *deltaEncodedChunk) unmarshalFromBuf(buf []byte) error {
 	return nil
 }
 
-func (c deltaEncodedChunk) size() int {
-	return len(c)
+func (c deltaEncodedChunk) utilization() float64 {
+	return float64(len(c)) / float64(cap(c))
 }
 
 // encoding implements chunk.

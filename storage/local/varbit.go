@@ -424,6 +424,10 @@ func (c varbitChunk) closed() bool {
 	return c[varbitFlagOffset] > 0x7F // Most significant bit set.
 }
 
+func (c varbitChunk) size() int {
+	return int(c.nextSampleOffset())
+}
+
 func (c varbitChunk) zeroDDTRepeats() (repeats uint64, offset uint16) {
 	offset = binary.BigEndian.Uint16(c[varbitCountOffsetBitOffset:])
 	if offset == 0 {

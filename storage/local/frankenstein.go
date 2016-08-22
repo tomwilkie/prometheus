@@ -50,6 +50,7 @@ type Ingester struct {
 	ingestedSamples    prometheus.Counter
 	discardedSamples   *prometheus.CounterVec
 	storedChunks       prometheus.Counter
+	chunkSizes         prometheus.Histogram
 	chunkStoreFailures prometheus.Counter
 	queries            prometheus.Counter
 	queriedSamples     prometheus.Counter
@@ -108,6 +109,13 @@ func NewIngester(cfg IngesterConfig, chunkStore ChunkStore) (*Ingester, error) {
 			Subsystem: subsystem,
 			Name:      "stored_chunks_total",
 			Help:      "The total number of chunks sent to the chunk store.",
+		}),
+		chunkSizes: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "chunk_size_bytes",
+			Help:      "Distribution of stored chunk sizes",
+			Buckets:   prometheus.ExponentialBuckets(64, 2.0, 10),
 		}),
 		chunkStoreFailures: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
@@ -452,6 +460,8 @@ func (i *Ingester) flushChunks(ctx context.Context, fp model.Fingerprint, metric
 			return err
 		}
 
+		i.chunkSizes.Observe(float64(chunk.c.size()))
+
 		wireChunks = append(wireChunks, wire.Chunk{
 			ID:      fmt.Sprintf("%d:%d:%d", fp, chunk.chunkFirstTime, chunk.chunkLastTime),
 			From:    chunk.chunkFirstTime,
@@ -476,6 +486,7 @@ func (i *Ingester) Describe(ch chan<- *prometheus.Desc) {
 	ch <- i.ingestedSamples.Desc()
 	i.discardedSamples.Describe(ch)
 	ch <- i.storedChunks.Desc()
+	ch <- i.chunkSizes.Desc()
 	ch <- i.chunkStoreFailures.Desc()
 	ch <- i.queries.Desc()
 	ch <- i.queriedSamples.Desc()
@@ -505,6 +516,7 @@ func (i *Ingester) Collect(ch chan<- prometheus.Metric) {
 	ch <- i.ingestedSamples
 	i.discardedSamples.Collect(ch)
 	ch <- i.storedChunks
+	ch <- i.chunkSizes
 	ch <- i.chunkStoreFailures
 	ch <- i.queries
 	ch <- i.queriedSamples

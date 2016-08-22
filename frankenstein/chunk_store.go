@@ -57,7 +57,7 @@ var (
 	}, []string{"operation", "status_code"})
 	dynamoRequestPages = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "prometheus",
-		Name:      "dynamo_request_page_count",
+		Name:      "dynamo_request_pages",
 		Help:      "Number of pages by DynamoDB request",
 		Buckets:   prometheus.ExponentialBuckets(1, 2.0, 5),
 	})

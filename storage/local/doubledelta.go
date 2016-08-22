@@ -267,7 +267,7 @@ func (c *doubleDeltaEncodedChunk) unmarshalFromBuf(buf []byte) error {
 }
 
 func (c doubleDeltaEncodedChunk) size() int {
-	return cap(c)
+	return len(c)
 }
 
 // encoding implements chunk.

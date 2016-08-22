@@ -55,6 +55,12 @@ var (
 		Help:      "Time spent doing DynamoDB requests.",
 		Buckets:   []float64{.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1},
 	}, []string{"operation", "status_code"})
+	dynamoRequestPages = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "prometheus",
+		Name:      "dynamo_request_page_count",
+		Help:      "Number of pages by DynamoDB request",
+		Buckets:   prometheus.ExponentialBuckets(1, 2.0, 5),
+	})
 	dynamoConsumedCapacity = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "prometheus",
 		Name:      "dynamo_consumed_capacity_total",
@@ -76,6 +82,7 @@ var (
 func init() {
 	prometheus.MustRegister(dynamoRequestDuration)
 	prometheus.MustRegister(dynamoConsumedCapacity)
+	prometheus.MustRegister(dynamoRequestPages)
 	prometheus.MustRegister(droppedMatches)
 	prometheus.MustRegister(s3RequestDuration)
 }
@@ -485,7 +492,10 @@ func (c *AWSChunkStore) lookupChunksForMetricName(userID string, hour int64, met
 
 	chunkSet := wire.ChunksByID{}
 	var processingError error
+	var pages int
+	defer func() { dynamoRequestPages.Observe(float64(pages)) }()
 	if err := timeRequest("QueryPages", dynamoRequestDuration, func() error {
+		pages++
 		return c.dynamodb.QueryPages(input, func(resp *dynamodb.QueryOutput, lastPage bool) (shouldContinue bool) {
 			processingError = processResponse(resp, &chunkSet, nil)
 			return processingError != nil && !lastPage
@@ -538,8 +548,11 @@ func (c *AWSChunkStore) lookupChunksForMatcher(userID string, hour int64, metric
 
 	chunkSet := wire.ChunksByID{}
 	var processingError error
+	var pages int
+	defer func() { dynamoRequestPages.Observe(float64(pages)) }()
 	if err := timeRequest("QueryPages", dynamoRequestDuration, func() error {
 		return c.dynamodb.QueryPages(input, func(resp *dynamodb.QueryOutput, lastPage bool) (shouldContinue bool) {
+			pages++
 			processingError = processResponse(resp, &chunkSet, matcher)
 			return processingError != nil && !lastPage
 		})

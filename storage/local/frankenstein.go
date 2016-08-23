@@ -106,7 +106,7 @@ func NewIngester(cfg IngesterConfig, chunkStore ChunkStore) (*Ingester, error) {
 		chunkUtilization: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
-			Name:      "chunk_utlization",
+			Name:      "chunk_utilization",
 			Help:      "Distribution of stored chunk utilization",
 			Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
 		}),

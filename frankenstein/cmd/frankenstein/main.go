@@ -125,7 +125,7 @@ func main() {
 	case distributor:
 		setupDistributor(consul, chunkStore, remoteTimeout)
 	case ingester:
-		registerIngester(consul, listenPort, numTokens)
+		frankenstein.RegisterIngester(consul, listenPort, numTokens)
 		cfg := local.IngesterConfig{
 			FlushCheckPeriod: flushPeriod,
 			MaxChunkAge:      maxChunkAge,
@@ -199,19 +199,6 @@ func setupQuerier(
 
 	http.Handle(prefix+"/graph", frankenstein.GraphHandler())
 	http.Handle(prefix+"/static/", frankenstein.StaticAssetsHandler(prefix+"/static/"))
-}
-
-func registerIngester(consulClient frankenstein.ConsulClient, listenPort, numTokens int) error {
-	var err error
-	for i := 0; i < 10; i++ {
-		if err = frankenstein.WriteIngesterConfigToConsul(consulClient, listenPort, numTokens); err == nil {
-			break
-		} else {
-			log.Errorf("Failed to write to consul, sleeping: %v", err)
-			time.Sleep(1 * time.Second)
-		}
-	}
-	return err
 }
 
 func setupIngester(

@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"time"
 
 	"github.com/prometheus/common/log"
 )
@@ -29,6 +30,20 @@ import (
 const (
 	infName = "eth0"
 )
+
+// RegisterIngester registers an ingester with Consul.
+func RegisterIngester(consulClient ConsulClient, listenPort, numTokens int) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		if err = WriteIngesterConfigToConsul(consulClient, listenPort, numTokens); err == nil {
+			break
+		} else {
+			log.Errorf("Failed to write to consul, sleeping: %v", err)
+			time.Sleep(1 * time.Second)
+		}
+	}
+	return err
+}
 
 // WriteIngesterConfigToConsul writes ingester config to Consul
 func WriteIngesterConfigToConsul(consulClient ConsulClient, listenPort int, numTokens int) error {

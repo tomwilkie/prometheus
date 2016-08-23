@@ -33,9 +33,23 @@ const (
 
 // RegisterIngester registers an ingester with Consul.
 func RegisterIngester(consulClient ConsulClient, listenPort, numTokens int) error {
+	desc, err := describeLocalIngester(listenPort, numTokens)
+	if err != nil {
+		return err
+	}
+	buf, err := json.Marshal(desc)
+	if err != nil {
+		return err
+	}
+
+	return updateLoop(consulClient, desc.ID, buf)
+}
+
+func updateLoop(consulClient ConsulClient, id string, buf []byte) error {
 	var err error
 	for i := 0; i < 10; i++ {
-		if err = WriteIngesterConfigToConsul(consulClient, listenPort, numTokens); err == nil {
+		log.Info("Adding ingester to consul")
+		if err = consulClient.PutBytes(id, buf); err == nil {
 			break
 		} else {
 			log.Errorf("Failed to write to consul, sleeping: %v", err)
@@ -43,25 +57,6 @@ func RegisterIngester(consulClient ConsulClient, listenPort, numTokens int) erro
 		}
 	}
 	return err
-}
-
-// WriteIngesterConfigToConsul writes ingester config to Consul
-func WriteIngesterConfigToConsul(consulClient ConsulClient, listenPort int, numTokens int) error {
-	log.Info("Adding ingester to consul")
-
-	desc, err := describeLocalIngester(listenPort, numTokens)
-	if err != nil {
-		return err
-	}
-	return writeIngesterConfigToConsul(consulClient, desc)
-}
-
-func writeIngesterConfigToConsul(consulClient ConsulClient, desc *IngesterDesc) error {
-	buf, err := json.Marshal(desc)
-	if err != nil {
-		return err
-	}
-	return consulClient.PutBytes(desc.ID, buf)
 }
 
 // describeLocalIngester returns an IngesterDesc for the ingester that is this

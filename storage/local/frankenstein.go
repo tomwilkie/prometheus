@@ -18,17 +18,18 @@ import (
 )
 
 const (
-	UserIDContextKey = "FrankensteinUserID" // TODO dedupe with copy in frankenstein/
+	UserIDContextKey  = "FrankensteinUserID" // TODO dedupe with copy in frankenstein/
+	ingesterSubsystem = "ingester"
 )
 
 var (
 	memorySeriesDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "memory_series"),
+		prometheus.BuildFQName(namespace, ingesterSubsystem, "memory_series"),
 		"The current number of series in memory.",
 		nil, nil,
 	)
 	memoryUsersDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "memory_users"),
+		prometheus.BuildFQName(namespace, ingesterSubsystem, "memory_users"),
 		"The current number of users in memory.",
 		nil, nil,
 	)
@@ -90,14 +91,14 @@ func NewIngester(cfg IngesterConfig, chunkStore ChunkStore) (*Ingester, error) {
 
 		ingestedSamples: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "ingested_samples_total",
 			Help:      "The total number of samples ingested.",
 		}),
 		discardedSamples: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: namespace,
-				Subsystem: subsystem,
+				Subsystem: ingesterSubsystem,
 				Name:      "out_of_order_samples_total",
 				Help:      "The total number of samples that were discarded because their timestamps were at or before the last received sample for a series.",
 			},
@@ -105,26 +106,26 @@ func NewIngester(cfg IngesterConfig, chunkStore ChunkStore) (*Ingester, error) {
 		),
 		chunkUtilization: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "chunk_utilization",
-			Help:      "Distribution of stored chunk utilization",
+			Help:      "Distribution of stored chunk utilization.",
 			Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
 		}),
 		chunkStoreFailures: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "chunk_store_failures_total",
 			Help:      "The total number of errors while storing chunks to the chunk store.",
 		}),
 		queries: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "queries_total",
 			Help:      "The total number of queries the ingester has handled.",
 		}),
 		queriedSamples: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "queried_samples_total",
 			Help:      "The total number of samples returned from queries.",
 		}),

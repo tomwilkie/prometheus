@@ -18,17 +18,18 @@ import (
 )
 
 const (
-	UserIDContextKey = "FrankensteinUserID" // TODO dedupe with copy in frankenstein/
+	UserIDContextKey  = "FrankensteinUserID" // TODO dedupe with copy in frankenstein/
+	ingesterSubsystem = "ingester"
 )
 
 var (
 	memorySeriesDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "memory_series"),
+		prometheus.BuildFQName(namespace, ingesterSubsystem, "memory_series"),
 		"The current number of series in memory.",
 		nil, nil,
 	)
 	memoryUsersDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "memory_users"),
+		prometheus.BuildFQName(namespace, ingesterSubsystem, "memory_users"),
 		"The current number of users in memory.",
 		nil, nil,
 	)
@@ -53,6 +54,7 @@ type Ingester struct {
 	chunkStoreFailures prometheus.Counter
 	queries            prometheus.Counter
 	queriedSamples     prometheus.Counter
+	memoryChunks       prometheus.Gauge
 }
 
 type IngesterConfig struct {
@@ -90,14 +92,14 @@ func NewIngester(cfg IngesterConfig, chunkStore ChunkStore) (*Ingester, error) {
 
 		ingestedSamples: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "ingested_samples_total",
 			Help:      "The total number of samples ingested.",
 		}),
 		discardedSamples: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: namespace,
-				Subsystem: subsystem,
+				Subsystem: ingesterSubsystem,
 				Name:      "out_of_order_samples_total",
 				Help:      "The total number of samples that were discarded because their timestamps were at or before the last received sample for a series.",
 			},
@@ -105,26 +107,32 @@ func NewIngester(cfg IngesterConfig, chunkStore ChunkStore) (*Ingester, error) {
 		),
 		chunkUtilization: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "chunk_utilization",
-			Help:      "Distribution of stored chunk utilization",
+			Help:      "Distribution of stored chunk utilization.",
 			Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
+		}),
+		memoryChunks: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: ingesterSubsystem,
+			Name:      "memory_chunks",
+			Help:      "The total number of samples returned from queries.",
 		}),
 		chunkStoreFailures: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "chunk_store_failures_total",
 			Help:      "The total number of errors while storing chunks to the chunk store.",
 		}),
 		queries: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "queries_total",
 			Help:      "The total number of queries the ingester has handled.",
 		}),
 		queriedSamples: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
-			Subsystem: subsystem,
+			Subsystem: ingesterSubsystem,
 			Name:      "queried_samples_total",
 			Help:      "The total number of samples returned from queries.",
 		}),
@@ -216,10 +224,13 @@ func (i *Ingester) append(ctx context.Context, sample *model.Sample) error {
 		i.discardedSamples.WithLabelValues(outOfOrderTimestamp).Inc()
 		return ErrOutOfOrderSample // Caused by the caller.
 	}
+	prevNumChunks := len(series.chunkDescs)
 	_, err = series.add(model.SamplePair{
 		Value:     sample.Value,
 		Timestamp: sample.Timestamp,
 	})
+	i.memoryChunks.Add(float64(len(series.chunkDescs) - prevNumChunks))
+
 	if err == nil {
 		// TODO: Track append failures too (unlikely to happen).
 		i.ingestedSamples.Inc()
@@ -436,6 +447,7 @@ func (i *Ingester) flushSeries(ctx context.Context, u *userState, fp model.Finge
 	// now remove the chunks
 	u.fpLocker.Lock(fp)
 	series.chunkDescs = series.chunkDescs[len(chunks):]
+	i.memoryChunks.Sub(float64(len(chunks)))
 	if len(series.chunkDescs) == 0 {
 		u.fpToSeries.del(fp)
 		u.index.delete(series.metric, fp)

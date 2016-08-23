@@ -54,6 +54,7 @@ type Ingester struct {
 	chunkStoreFailures prometheus.Counter
 	queries            prometheus.Counter
 	queriedSamples     prometheus.Counter
+	memoryChunks       prometheus.Gauge
 }
 
 type IngesterConfig struct {
@@ -110,6 +111,12 @@ func NewIngester(cfg IngesterConfig, chunkStore ChunkStore) (*Ingester, error) {
 			Name:      "chunk_utilization",
 			Help:      "Distribution of stored chunk utilization.",
 			Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
+		}),
+		memoryChunks: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: ingesterSubsystem,
+			Name:      "memory_chunks",
+			Help:      "The total number of samples returned from queries.",
 		}),
 		chunkStoreFailures: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: namespace,
@@ -217,10 +224,13 @@ func (i *Ingester) append(ctx context.Context, sample *model.Sample) error {
 		i.discardedSamples.WithLabelValues(outOfOrderTimestamp).Inc()
 		return ErrOutOfOrderSample // Caused by the caller.
 	}
+	prevNumChunks := len(series.chunkDescs)
 	_, err = series.add(model.SamplePair{
 		Value:     sample.Value,
 		Timestamp: sample.Timestamp,
 	})
+	i.memoryChunks.Add(float64(len(series.chunkDescs) - prevNumChunks))
+
 	if err == nil {
 		// TODO: Track append failures too (unlikely to happen).
 		i.ingestedSamples.Inc()
@@ -437,6 +447,7 @@ func (i *Ingester) flushSeries(ctx context.Context, u *userState, fp model.Finge
 	// now remove the chunks
 	u.fpLocker.Lock(fp)
 	series.chunkDescs = series.chunkDescs[len(chunks):]
+	i.memoryChunks.Sub(float64(len(chunks)))
 	if len(series.chunkDescs) == 0 {
 		u.fpToSeries.del(fp)
 		u.index.delete(series.metric, fp)

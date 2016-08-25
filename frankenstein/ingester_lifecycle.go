@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/prometheus/common/log"
@@ -31,10 +32,14 @@ const (
 	infName = "eth0"
 )
 
+// IngesterRegistration manages the connection between the ingester and Consul.
 type IngesterRegistration struct {
 	consul ConsulClient
 	id     string
 	desc   []byte
+
+	quit chan struct{}
+	wait sync.WaitGroup
 }
 
 // RegisterIngester registers an ingester with Consul.
@@ -48,23 +53,33 @@ func RegisterIngester(consulClient ConsulClient, listenPort, numTokens int) (*In
 		return nil, err
 	}
 
-	r := &IngesterRegistration{consulClient, desc.ID, buf}
-	r.updateLoop()
+	r := &IngesterRegistration{
+		consul: consulClient,
+		id:     desc.ID,
+		desc:   buf,
+		quit:   make(chan struct{}),
+	}
+	r.wait.Add(1)
+	go r.updateLoop()
 	return r, nil
 }
 
 func (r *IngesterRegistration) updateLoop() error {
-	var err error
-	for i := 0; i < 10; i++ {
-		log.Info("Adding ingester to consul")
-		if err = r.consul.PutBytes(r.id, r.desc); err == nil {
-			break
-		} else {
-			log.Errorf("Failed to write to consul, sleeping: %v", err)
-			time.Sleep(1 * time.Second)
+	defer r.wait.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			log.Info("Adding ingester to consul")
+			if err := r.consul.PutBytes(r.id, r.desc); err == nil {
+				break
+			} else {
+				log.Errorf("Failed to write to consul, sleeping: %v", err)
+			}
+		case <-r.quit:
+			ticker.Stop()
 		}
 	}
-	return err
 }
 
 // describeLocalIngester returns an IngesterDesc for the ingester that is this

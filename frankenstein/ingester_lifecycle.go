@@ -32,13 +32,8 @@ const (
 	infName = "eth0"
 )
 
-// IngesterRegistration is the registration of an ingester with a register.
-type IngesterRegistration interface {
-	Unregister() error
-}
-
 // IngesterRegistration manages the connection between the ingester and Consul.
-type ingesterRegistration struct {
+type IngesterRegistration struct {
 	consul ConsulClient
 	id     string
 	desc   []byte
@@ -48,7 +43,7 @@ type ingesterRegistration struct {
 }
 
 // RegisterIngester registers an ingester with Consul.
-func RegisterIngester(consulClient ConsulClient, listenPort, numTokens int) (IngesterRegistration, error) {
+func RegisterIngester(consulClient ConsulClient, listenPort, numTokens int) (*IngesterRegistration, error) {
 	desc, err := describeLocalIngester(listenPort, numTokens)
 	if err != nil {
 		return nil, err
@@ -58,7 +53,7 @@ func RegisterIngester(consulClient ConsulClient, listenPort, numTokens int) (Ing
 		return nil, err
 	}
 
-	r := &ingesterRegistration{
+	r := &IngesterRegistration{
 		consul: consulClient,
 		id:     desc.ID,
 		desc:   buf,
@@ -69,7 +64,7 @@ func RegisterIngester(consulClient ConsulClient, listenPort, numTokens int) (Ing
 	return r, nil
 }
 
-func (r *ingesterRegistration) updateLoop() error {
+func (r *IngesterRegistration) updateLoop() error {
 	defer r.wait.Done()
 	ticker := time.NewTicker(1 * time.Second)
 	for {
@@ -120,7 +115,7 @@ func generateTokens(id string, numTokens int) []uint32 {
 }
 
 // Unregister deletes ingestor config from Consul
-func (r *ingesterRegistration) Unregister() error {
+func (r *IngesterRegistration) Unregister() error {
 	log.Info("Removing ingester from consul")
 	buf, err := json.Marshal(IngesterDesc{
 		ID:       r.id,

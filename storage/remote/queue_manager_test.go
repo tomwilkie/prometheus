@@ -14,6 +14,7 @@
 package remote
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -80,13 +81,16 @@ func (c *TestBlockingStorageClient) Name() string {
 func TestSampleDelivery(t *testing.T) {
 	// Let's create an even number of send batches so we don't run into the
 	// batch timeout case.
-	n := maxSamplesPerSend * 2
+	cfg := defaultConfig
+	n := cfg.QueueCapacity * 2
+	cfg.Shards = 1
 
 	samples := make(model.Samples, 0, n)
 	for i := 0; i < n; i++ {
+		name := model.LabelValue(fmt.Sprintf("test_metric_%d", i))
 		samples = append(samples, &model.Sample{
 			Metric: model.Metric{
-				model.MetricNameLabel: "test_metric",
+				model.MetricNameLabel: name,
 			},
 			Value: model.SampleValue(i),
 		})
@@ -94,7 +98,7 @@ func TestSampleDelivery(t *testing.T) {
 
 	c := &TestStorageClient{}
 	c.expectSamples(samples[:len(samples)/2])
-	m := NewStorageQueueManager(c, len(samples)/2)
+	m := NewStorageQueueManager(c, cfg)
 
 	// These should be received by the client.
 	for _, s := range samples[:len(samples)/2] {
@@ -111,22 +115,25 @@ func TestSampleDelivery(t *testing.T) {
 }
 
 func TestSpawnNotMoreThanMaxConcurrentSendsGoroutines(t *testing.T) {
-	// `maxSamplesPerSend*maxConcurrentSends + 1` samples should be consumed by
+	// `maxSamplesPerSend*maxConcurrentSends` samples should be consumed by
 	//  goroutines, `maxSamplesPerSend` should be still in the queue.
-	n := maxSamplesPerSend*maxConcurrentSends + maxSamplesPerSend*2
+	cfg := defaultConfig
+	n := cfg.MaxSamplesPerSend*cfg.Shards + cfg.MaxSamplesPerSend
+	cfg.QueueCapacity = n
 
 	samples := make(model.Samples, 0, n)
 	for i := 0; i < n; i++ {
+		name := model.LabelValue(fmt.Sprintf("test_metric_%d", i))
 		samples = append(samples, &model.Sample{
 			Metric: model.Metric{
-				model.MetricNameLabel: "test_metric",
+				model.MetricNameLabel: name,
 			},
 			Value: model.SampleValue(i),
 		})
 	}
 
 	c := NewTestBlockedStorageClient()
-	m := NewStorageQueueManager(c, n)
+	m := NewStorageQueueManager(c, cfg)
 
 	go m.Run()
 
@@ -134,12 +141,13 @@ func TestSpawnNotMoreThanMaxConcurrentSendsGoroutines(t *testing.T) {
 		m.Append(s)
 	}
 
-	for i := 0; i < maxConcurrentSends; i++ {
+	for i := 0; i < cfg.Shards; i++ {
 		c.getData <- true // Wait while all goroutines are spawned.
 	}
 
-	if len(m.queue) != maxSamplesPerSend {
-		t.Errorf("Queue should contain %d samples, it contains 0.", maxSamplesPerSend)
+	queueLength := m.QueueLength()
+	if queueLength != cfg.MaxSamplesPerSend {
+		t.Errorf("Queue should contain %d samples, it contains %d.", cfg.MaxSamplesPerSend, queueLength)
 	}
 
 	c.unlock()

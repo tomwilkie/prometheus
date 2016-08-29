@@ -43,10 +43,10 @@ type StorageClient interface {
 }
 
 type StorageQueueManagerConfig struct {
-	QueueCapacity     int           // number of samples to buffer per shard before we start dropping them
-	Shards            int           // number of shards, ie amount of concurrency
-	MaxSamplesPerSend int           // maximum number of samples per send
-	BatchSendDeadline time.Duration // maximum time sample will wait in buffer
+	QueueCapacity     int           // Number of samples to buffer per shard before we start dropping them.
+	Shards            int           // Number of shards, ie amount of concurrency.
+	MaxSamplesPerSend int           // Maximum number of samples per send.
+	BatchSendDeadline time.Duration // Maximum time sample will wait in buffer.
 }
 
 var defaultConfig = StorageQueueManagerConfig{

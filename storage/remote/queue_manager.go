@@ -229,9 +229,11 @@ func (t *StorageQueueManager) runShard(i int) {
 		select {
 		case s, ok := <-shard:
 			if !ok {
-				log.Infof("Flushing %d samples to remote storage...", len(pendingSamples))
-				t.sendSamples(pendingSamples)
-				log.Infof("Done flushing.")
+				if len(pendingSamples) > 0 {
+					log.Infof("Flushing %d samples to remote storage...", len(pendingSamples))
+					t.sendSamples(pendingSamples)
+					log.Infof("Done flushing.")
+				}
 				return
 			}
 
@@ -242,8 +244,10 @@ func (t *StorageQueueManager) runShard(i int) {
 				pendingSamples = pendingSamples[t.cfg.MaxSamplesPerSend:]
 			}
 		case <-time.After(t.cfg.BatchSendDeadline):
-			t.sendSamples(pendingSamples)
-			pendingSamples = pendingSamples[:0]
+			if len(pendingSamples) > 0 {
+				t.sendSamples(pendingSamples)
+				pendingSamples = pendingSamples[:0]
+			}
 		}
 	}
 }

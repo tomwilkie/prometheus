@@ -22,28 +22,53 @@ import (
 )
 
 type TestStorageClient struct {
-	receivedSamples model.Samples
-	expectedSamples model.Samples
+	receivedSamples map[string]model.Samples
+	expectedSamples map[string]model.Samples
 	wg              sync.WaitGroup
+	mtx             sync.Mutex
 }
 
-func (c *TestStorageClient) expectSamples(s model.Samples) {
-	c.expectedSamples = append(c.expectedSamples, s...)
-	c.wg.Add(len(s))
+func NewTestStorageClient() *TestStorageClient {
+	return &TestStorageClient{
+		receivedSamples: map[string]model.Samples{},
+		expectedSamples: map[string]model.Samples{},
+	}
+}
+
+func (c *TestStorageClient) expectSamples(ss model.Samples) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	for _, s := range ss {
+		ts := s.Metric.String()
+		c.expectedSamples[ts] = append(c.expectedSamples[ts], s)
+	}
+	c.wg.Add(len(ss))
 }
 
 func (c *TestStorageClient) waitForExpectedSamples(t *testing.T) {
 	c.wg.Wait()
-	for i, expected := range c.expectedSamples {
-		if !expected.Equal(c.receivedSamples[i]) {
-			t.Fatalf("%d. Expected %v, got %v", i, expected, c.receivedSamples[i])
+
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+	for ts, expectedSamples := range c.expectedSamples {
+		for i, expected := range expectedSamples {
+			if !expected.Equal(c.receivedSamples[ts][i]) {
+				t.Fatalf("%d. Expected %v, got %v", i, expected, c.receivedSamples[ts][i])
+			}
 		}
 	}
 }
 
-func (c *TestStorageClient) Store(s model.Samples) error {
-	c.receivedSamples = append(c.receivedSamples, s...)
-	c.wg.Add(-len(s))
+func (c *TestStorageClient) Store(ss model.Samples) error {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	for _, s := range ss {
+		ts := s.Metric.String()
+		c.receivedSamples[ts] = append(c.receivedSamples[ts], s)
+	}
+	c.wg.Add(-len(ss))
 	return nil
 }
 
@@ -96,7 +121,7 @@ func TestSampleDelivery(t *testing.T) {
 		})
 	}
 
-	c := &TestStorageClient{}
+	c := NewTestStorageClient()
 	c.expectSamples(samples[:len(samples)/2])
 	m := NewStorageQueueManager(c, cfg)
 
@@ -106,6 +131,39 @@ func TestSampleDelivery(t *testing.T) {
 	}
 	// These will be dropped because the queue is full.
 	for _, s := range samples[len(samples)/2:] {
+		m.Append(s)
+	}
+	go m.Run()
+	defer m.Stop()
+
+	c.waitForExpectedSamples(t)
+}
+
+func TestSampleDeliveryOrder(t *testing.T) {
+	cfg := defaultConfig
+	ts := 10
+	n := cfg.MaxSamplesPerSend * ts
+	// Ensure we don't drop samples in this test.
+	cfg.QueueCapacity = n
+
+	samples := make(model.Samples, 0, n)
+	for i := 0; i < n; i++ {
+		name := model.LabelValue(fmt.Sprintf("test_metric_%d", i%ts))
+		samples = append(samples, &model.Sample{
+			Metric: model.Metric{
+				model.MetricNameLabel: name,
+			},
+			Value:     model.SampleValue(i),
+			Timestamp: model.Time(i),
+		})
+	}
+
+	c := NewTestStorageClient()
+	c.expectSamples(samples)
+	m := NewStorageQueueManager(c, cfg)
+
+	// These should be received by the client.
+	for _, s := range samples {
 		m.Append(s)
 	}
 	go m.Run()

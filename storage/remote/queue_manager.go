@@ -124,7 +124,7 @@ func NewStorageQueueManager(tsdb StorageClient, cfg StorageQueueManagerConfig) *
 				constLabels,
 			),
 			prometheus.GaugeValue,
-			float64(cfg.QueueCapacity),
+			float64(cfg.QueueCapacity*cfg.Shards),
 		),
 	}
 

@@ -203,7 +203,7 @@ func TestSpawnNotMoreThanMaxConcurrentSendsGoroutines(t *testing.T) {
 		c.getData <- true // Wait while all goroutines are spawned.
 	}
 
-	queueLength := m.QueueLength()
+	queueLength := m.queueLen()
 	if queueLength != cfg.MaxSamplesPerSend {
 		t.Errorf("Queue should contain %d samples, it contains %d.", cfg.MaxSamplesPerSend, queueLength)
 	}

@@ -178,7 +178,7 @@ func (t *StorageQueueManager) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // QueueLength returns the number of outstanding samples in the queue.
-func (t *StorageQueueManager) QueueLength() int {
+func (t *StorageQueueManager) queueLen() int {
 	queueLength := 0
 	for _, shard := range t.shards {
 		queueLength += len(shard)
@@ -190,7 +190,7 @@ func (t *StorageQueueManager) QueueLength() int {
 func (t *StorageQueueManager) Collect(ch chan<- prometheus.Metric) {
 	t.samplesCount.Collect(ch)
 	t.sendLatency.Collect(ch)
-	t.queueLength.Set(float64(t.QueueLength()))
+	t.queueLength.Set(float64(t.queueLen()))
 	ch <- t.failedBatches
 	ch <- t.failedSamples
 	ch <- t.queueLength

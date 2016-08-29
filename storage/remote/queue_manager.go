@@ -103,7 +103,7 @@ func NewStorageQueueManager(tsdb StorageClient, cfg StorageQueueManagerConfig) *
 				Namespace:   namespace,
 				Subsystem:   subsystem,
 				Name:        "sent_batch_duration_seconds",
-				Help:        "Duration or sample batch send calls to the remote storage.",
+				Help:        "Duration of sample batch send calls to the remote storage.",
 				ConstLabels: constLabels,
 				Buckets:     prometheus.DefBuckets,
 			},

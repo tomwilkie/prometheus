@@ -8,20 +8,8 @@ machine:
 dependencies:
   pre:
     - mkdir -p $(dirname $SRCDIR) && cp -r $(pwd)/ $SRCDIR
-    - go get -u github.com/weaveworks/build-tools/cmd/wcloud
 
 test:
   override:
     - cd $SRCDIR; make promu
-    - cd $SRCDIR; GOOS=linux make build docker docker-frank
-
-deployment:
-  hub_branch:
-    branch: frankenstein
-    owner: tomwilkie
-    commands:
-      - docker login -e $DOCKER_EMAIL -u $DOCKER_LOGIN -p $DOCKER_PASSWORD
-      - docker push tomwilkie/prometheus:$(git rev-parse --abbrev-ref HEAD)-$(git rev-parse --short HEAD)
-      - docker push tomwilkie/frankenstein:$(git rev-parse --abbrev-ref HEAD)-$(git rev-parse --short HEAD)
-      - wcloud deploy -u circle tomwilkie/prometheus:$(git rev-parse --abbrev-ref HEAD)-$(git rev-parse --short HEAD)
-      - wcloud deploy -u circle tomwilkie/frankenstein:$(git rev-parse --abbrev-ref HEAD)-$(git rev-parse --short HEAD)
+    - cd $SRCDIR; GOOS=linux make build docker

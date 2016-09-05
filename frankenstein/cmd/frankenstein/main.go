@@ -125,19 +125,13 @@ func main() {
 	case distributor:
 		setupDistributor(consul, chunkStore, remoteTimeout)
 	case ingester:
-		registration, err := frankenstein.RegisterIngester(consul, listenPort, numTokens)
-		if err != nil {
-			// This only happens for errors in configuration & set-up, not for
-			// network errors.
-			log.Fatalf("Could not register ingester: %v", err)
-		}
 		cfg := local.IngesterConfig{
 			FlushCheckPeriod: flushPeriod,
 			MaxChunkAge:      maxChunkAge,
 		}
-		ingester := setupIngester(chunkStore, cfg)
+		ingester := setupIngester(consul, chunkStore, listenPort, cfg, numTokens)
 		defer ingester.Stop()
-		defer registration.Unregister()
+		defer frankenstein.DeleteIngesterConfigFromConsul(consul)
 	default:
 		log.Fatalf("Mode %s not supported!", mode)
 	}
@@ -207,9 +201,21 @@ func setupQuerier(
 }
 
 func setupIngester(
+	consulClient frankenstein.ConsulClient,
 	chunkStore frankenstein.ChunkStore,
+	listenPort int,
 	cfg local.IngesterConfig,
+	numTokens int,
 ) *local.Ingester {
+	for i := 0; i < 10; i++ {
+		if err := frankenstein.WriteIngesterConfigToConsul(consulClient, listenPort, numTokens); err == nil {
+			break
+		} else {
+			log.Errorf("Failed to write to consul, sleeping: %v", err)
+			time.Sleep(1 * time.Second)
+		}
+	}
+
 	ingester, err := local.NewIngester(cfg, chunkStore)
 	if err != nil {
 		log.Fatal(err)

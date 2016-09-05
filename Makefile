@@ -62,12 +62,6 @@ docker:
 	docker tag $(DOCKER_IMAGE_NAME) tomwilkie/$(DOCKER_IMAGE_NAME)
 	docker tag $(DOCKER_IMAGE_NAME) tomwilkie/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)
 
-docker-frank:
-	@echo ">> building frank docker images"
-	@cp frank frankenstein/
-	docker build -t tomwilkie/frankenstein frankenstein/
-	docker tag tomwilkie/frankenstein tomwilkie/frankenstein:$(DOCKER_IMAGE_TAG)
-
 assets:
 	@echo ">> writing assets"
 	@$(GO) get -u github.com/jteeuwen/go-bindata/...

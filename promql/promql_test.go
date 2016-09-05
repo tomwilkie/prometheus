@@ -35,21 +35,3 @@ func TestLocalStorageEvaluations(t *testing.T) {
 		test.Close()
 	}
 }
-
-func TestIngesterEvaluations(t *testing.T) {
-	files, err := filepath.Glob("testdata/*.test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, fn := range files {
-		test, err := newTestFromFile(t, IngesterStorage, fn)
-		if err != nil {
-			t.Errorf("error creating test for %s: %s", fn, err)
-		}
-		err = test.Run()
-		if err != nil {
-			t.Errorf("error running test %s: %s", fn, err)
-		}
-		test.Close()
-	}
-}

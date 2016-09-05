@@ -23,12 +23,9 @@ import (
 	"time"
 
 	"github.com/prometheus/common/model"
-	"golang.org/x/net/context"
 
-	"github.com/prometheus/prometheus/frankenstein"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/local"
-	"github.com/prometheus/prometheus/storage/metric"
 	"github.com/prometheus/prometheus/util/testutil"
 )
 
@@ -49,7 +46,6 @@ type TestStorageMode int
 
 const (
 	LocalStorage TestStorageMode = iota
-	IngesterStorage
 )
 
 // Test is a sequence of read and write commands that are run
@@ -60,7 +56,6 @@ type Test struct {
 
 	cmds []testCommand
 
-	ingester     *local.Ingester
 	storage      local.Storage
 	closeStorage func()
 	queryEngine  *Engine
@@ -464,29 +459,6 @@ func (t *Test) Run() error {
 	return nil
 }
 
-type ingesterWrapper struct {
-	i *local.Ingester
-}
-
-func (i ingesterWrapper) Append(s *model.Sample) error {
-	ctx := context.WithValue(context.Background(), local.UserIDContextKey, "0")
-	return i.i.Append(ctx, []*model.Sample{s})
-}
-
-func (i ingesterWrapper) NeedsThrottling() bool {
-	ctx := context.WithValue(context.Background(), local.UserIDContextKey, "0")
-	return i.i.NeedsThrottling(ctx)
-}
-
-func (i ingesterWrapper) Query(_ context.Context, from, through model.Time, matchers ...*metric.LabelMatcher) (model.Matrix, error) {
-	ctx := context.WithValue(context.Background(), local.UserIDContextKey, "0")
-	return i.i.Query(ctx, from, through, matchers...)
-}
-
-func (i ingesterWrapper) LabelValuesForLabelName(context.Context, model.LabelName) (model.LabelValues, error) {
-	return nil, nil
-}
-
 // exec processes a single step of the test.
 func (t *Test) exec(tc testCommand) error {
 	switch cmd := tc.(type) {
@@ -494,13 +466,8 @@ func (t *Test) exec(tc testCommand) error {
 		t.clear()
 
 	case *loadCmd:
-		switch t.mode {
-		case LocalStorage:
-			cmd.append(t.storage)
-			t.storage.WaitForIndexing()
-		case IngesterStorage:
-			cmd.append(ingesterWrapper{t.ingester})
-		}
+		cmd.append(t.storage)
+		t.storage.WaitForIndexing()
 
 	case *evalCmd:
 		q := t.queryEngine.newQuery(cmd.expr, cmd.start, cmd.end, cmd.interval)
@@ -532,46 +499,22 @@ func (t *Test) clear() {
 		t.queryEngine.Stop()
 	}
 
-	switch t.mode {
-	case LocalStorage:
-		if t.closeStorage != nil {
-			t.closeStorage()
-		}
-
-		var closer testutil.Closer
-		t.storage, closer = local.NewTestStorage(t, 2)
-
-		t.closeStorage = closer.Close
-		t.queryEngine = NewEngine(t.storage, nil)
-	case IngesterStorage:
-		if t.ingester != nil {
-			t.ingester.Stop()
-		}
-		var err error
-		t.ingester, err = local.NewIngester(local.IngesterConfig{}, nil)
-		if err != nil {
-			t.Fatalf("Error creating test ingester: %v", err)
-		}
-		querier := frankenstein.MergeQuerier{
-			Queriers: []frankenstein.Querier{ingesterWrapper{t.ingester}},
-		}
-		t.queryEngine = NewEngine(querier, nil)
-	default:
-		panic("invalid test storage mode")
+	if t.closeStorage != nil {
+		t.closeStorage()
 	}
+
+	var closer testutil.Closer
+	t.storage, closer = local.NewTestStorage(t, 2)
+
+	t.closeStorage = closer.Close
+	t.queryEngine = NewEngine(t.storage, nil)
 }
 
 // Close closes resources associated with the Test.
 func (t *Test) Close() {
 	t.queryEngine.Stop()
-	switch t.mode {
-	case LocalStorage:
-		t.closeStorage()
-	case IngesterStorage:
-		t.ingester.Stop()
-	default:
-		panic("invalid test storage mode")
-	}
+	t.closeStorage()
+
 }
 
 // samplesAlmostEqual returns true if the two sample lines only differ by a

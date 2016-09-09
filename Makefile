@@ -37,7 +37,7 @@ check_license:
 	@./scripts/check_license.sh
 
 test:
-	@echo ">> running tests"
+	@echo ">> running short tests"
 	@$(GO) test -short $(pkgs)
 
 format:

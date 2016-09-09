@@ -72,9 +72,13 @@ type StorageQueueManager struct {
 }
 
 // NewStorageQueueManager builds a new StorageQueueManager.
-func NewStorageQueueManager(tsdb StorageClient, cfg StorageQueueManagerConfig) *StorageQueueManager {
+func NewStorageQueueManager(tsdb StorageClient, cfg *StorageQueueManagerConfig) *StorageQueueManager {
 	constLabels := prometheus.Labels{
 		"type": tsdb.Name(),
+	}
+
+	if cfg == nil {
+		cfg = &defaultConfig
 	}
 
 	shards := make([]chan *model.Sample, cfg.Shards)
@@ -83,7 +87,7 @@ func NewStorageQueueManager(tsdb StorageClient, cfg StorageQueueManagerConfig) *
 	}
 
 	t := &StorageQueueManager{
-		cfg:    cfg,
+		cfg:    *cfg,
 		tsdb:   tsdb,
 		shards: shards,
 		done:   make(chan struct{}),

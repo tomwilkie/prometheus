@@ -15,16 +15,14 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
-	"log"
-	"net"
+	"net/http"
 
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/model"
+	"golang.org/x/net/context"
+
 	"github.com/prometheus/prometheus/storage/remote"
 )
 
@@ -46,23 +44,44 @@ func (server *server) Write(ctx context.Context, req *remote.WriteRequest) (*rem
 	return &remote.WriteResponse{}, nil
 }
 
-type snappyDecompressor struct{}
-
-func (d *snappyDecompressor) Do(r io.Reader) ([]byte, error) {
-	sr := snappy.NewReader(r)
-	return ioutil.ReadAll(sr)
-}
-
-func (d *snappyDecompressor) Type() string {
-	return "snappy"
-}
-
 func main() {
-	lis, err := net.Listen("tcp", ":1234")
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
-	s := grpc.NewServer(grpc.RPCDecompressor(&snappyDecompressor{}))
-	remote.RegisterWriteServer(s, &server{})
-	s.Serve(lis)
+	http.Handle("/push", AppenderHandler(&server{}))
+	http.ListenAndServe(":1234", nil)
+}
+
+// AppenderHandler returns a http.Handler that accepts proto encoded samples.
+func AppenderHandler(s remote.WriteServer) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqBuf, err := ioutil.ReadAll(snappy.NewReader(r.Body))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var req remote.WriteRequest
+		if err := proto.Unmarshal(reqBuf, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		resp, err := s.Write(context.Background(), &req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		respBuf, err := proto.Marshal(resp)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if _, err := snappy.NewWriter(w).Write(respBuf); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Add("Content-Encoding", "snappy")
+		w.WriteHeader(http.StatusOK)
+	})
 }

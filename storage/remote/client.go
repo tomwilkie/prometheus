@@ -88,16 +88,6 @@ func (c *Client) Store(samples model.Samples) error {
 	if httpResp.StatusCode/100 != 2 {
 		return fmt.Errorf("server returned HTTP status %s", httpResp.Status)
 	}
-
-	buf.Reset()
-	if _, err = buf.ReadFrom(snappy.NewReader(httpResp.Body)); err != nil {
-		return err
-	}
-
-	var resp WriteResponse
-	if err = proto.Unmarshal(buf.Bytes(), &resp); err != nil {
-		return err
-	}
 	return nil
 }
 

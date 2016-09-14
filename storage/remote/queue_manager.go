@@ -33,33 +33,6 @@ const (
 	dropped = "dropped"
 )
 
-var (
-	sentSamplesTotalDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "sent_samples_total"),
-		"Total number of processed samples sent to remote storage.",
-		[]string{"type", result},
-		nil,
-	)
-	sentBatchDurationDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "sent_batch_duration_seconds"),
-		"Duration of sample batch send calls to the remote storage.",
-		[]string{"type", result},
-		nil,
-	)
-	queueLengthDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "queue_length"),
-		"The number of processed samples queued to be sent to the remote storage.",
-		[]string{"type"},
-		nil,
-	)
-	queueCapacityDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, "queue_capacity"),
-		"Total number of processed samples sent to remote storage.",
-		[]string{"type"},
-		nil,
-	)
-)
-
 // StorageClient defines an interface for sending a batch of samples to an
 // external timeseries database.
 type StorageClient interface {
@@ -124,6 +97,7 @@ func NewStorageQueueManager(tsdb StorageClient, cfg *StorageQueueManagerConfig) 
 				Namespace:   namespace,
 				Subsystem:   subsystem,
 				Name:        "sent_samples_total",
+				Help:        "Total number of processed samples sent to remote storage.",
 				ConstLabels: constLabels,
 			},
 			[]string{result},
@@ -133,6 +107,7 @@ func NewStorageQueueManager(tsdb StorageClient, cfg *StorageQueueManagerConfig) 
 				Namespace:   namespace,
 				Subsystem:   subsystem,
 				Name:        "sent_batch_duration_seconds",
+				Help:        "Duration of sample batch send calls to the remote storage.",
 				ConstLabels: constLabels,
 				Buckets:     prometheus.DefBuckets,
 			},
@@ -142,10 +117,16 @@ func NewStorageQueueManager(tsdb StorageClient, cfg *StorageQueueManagerConfig) 
 			Namespace:   namespace,
 			Subsystem:   subsystem,
 			Name:        "queue_length",
+			Help:        "The number of processed samples queued to be sent to the remote storage.",
 			ConstLabels: constLabels,
 		}),
 		queueCapacity: prometheus.MustNewConstMetric(
-			queueCapacityDesc,
+			prometheus.NewDesc(
+				prometheus.BuildFQName(namespace, subsystem, "queue_capacity"),
+				"Total number of processed samples sent to remote storage.",
+				nil,
+				constLabels,
+			),
 			prometheus.GaugeValue,
 			float64(cfg.QueueCapacity*cfg.Shards),
 			tsdb.Name(),
@@ -179,11 +160,11 @@ func (*StorageQueueManager) NeedsThrottling() bool {
 	return false
 }
 
-func StorageQueueManagerDescribe(ch chan<- *prometheus.Desc) {
-	ch <- sentSamplesTotalDesc
-	ch <- sentBatchDurationDesc
-	ch <- queueLengthDesc
-	ch <- queueCapacityDesc
+func (t *StorageQueueManager) Describe(ch chan<- *prometheus.Desc) {
+	t.sentSamplesTotal.Describe(ch)
+	t.sentBatchDuration.Describe(ch)
+	ch <- t.queueLength.Desc()
+	ch <- t.queueCapacity.Desc()
 }
 
 // QueueLength returns the number of outstanding samples in the queue.

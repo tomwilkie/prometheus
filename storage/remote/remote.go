@@ -133,7 +133,9 @@ func (s *Storage) NeedsThrottling() bool {
 
 // Describe implements prometheus.Collector.
 func (s *Storage) Describe(ch chan<- *prometheus.Desc) {
-	StorageQueueManagerDescribe(ch)
+	for _, q := range s.queues {
+		q.Describe(ch)
+	}
 }
 
 // Collect implements prometheus.Collector.

@@ -99,7 +99,11 @@ func (s *ReloadableStorage) NeedsThrottling() bool {
 
 // Describe implements prometheus.Collector.
 func (s *ReloadableStorage) Describe(ch chan<- *prometheus.Desc) {
-	StorageQueueManagerDescribe(ch)
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	for _, q := range s.queues {
+		q.Describe(ch)
+	}
 }
 
 // Collect implements prometheus.Collector.

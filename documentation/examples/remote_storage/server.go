@@ -49,8 +49,12 @@ func main() {
 	http.ListenAndServe(":1234", nil)
 }
 
+type WriteServer interface {
+	Write(context.Context, *remote.WriteRequest) (*remote.WriteResponse, error)
+}
+
 // AppenderHandler returns a http.Handler that accepts proto encoded samples.
-func AppenderHandler(s remote.WriteServer) http.Handler {
+func AppenderHandler(s WriteServer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqBuf, err := ioutil.ReadAll(snappy.NewReader(r.Body))
 		if err != nil {

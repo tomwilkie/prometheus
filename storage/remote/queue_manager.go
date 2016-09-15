@@ -123,7 +123,7 @@ func NewStorageQueueManager(tsdb StorageClient, cfg *StorageQueueManagerConfig) 
 		queueCapacity: prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
 				prometheus.BuildFQName(namespace, subsystem, "queue_capacity"),
-				"The capacity of the queue of samples to be sent to the remote storage.",
+				"Total number of processed samples sent to remote storage.",
 				nil,
 				constLabels,
 			),
@@ -159,7 +159,6 @@ func (*StorageQueueManager) NeedsThrottling() bool {
 	return false
 }
 
-// Describe implements prometheus.Collector.
 func (t *StorageQueueManager) Describe(ch chan<- *prometheus.Desc) {
 	t.sentSamplesTotal.Describe(ch)
 	t.sentBatchDuration.Describe(ch)
@@ -185,12 +184,12 @@ func (t *StorageQueueManager) Collect(ch chan<- prometheus.Metric) {
 	ch <- t.queueCapacity
 }
 
-// Run continuously sends samples to the remote storage.
-func (t *StorageQueueManager) Run() {
+// Start the queue manager sending samples to the remote storage.
+// Does not block.
+func (t *StorageQueueManager) Start() {
 	for i := 0; i < t.cfg.Shards; i++ {
 		go t.runShard(i)
 	}
-	t.wg.Wait()
 }
 
 // Stop stops sending samples to the remote storage and waits for pending

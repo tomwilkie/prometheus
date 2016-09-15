@@ -1025,7 +1025,7 @@ func (re Regexp) MarshalYAML() (interface{}, error) {
 
 // RemoteWriteConfig is the configuration for remote storage.
 type RemoteWriteConfig struct {
-	URL           URL            `yaml:"address,omitempty"`
+	URL           URL            `yaml:"url,omitempty"`
 	RemoteTimeout model.Duration `yaml:"remote_timeout,omitempty"`
 	BasicAuth     *BasicAuth     `yaml:"basic_auth,omitempty"`
 	TLSConfig     TLSConfig      `yaml:"tls_config,omitempty"`

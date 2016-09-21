@@ -311,16 +311,20 @@
 			"revisionTime": "2013-09-23T16:52:12+02:00"
 		},
 		{
-			"checksumSHA1": "jnVrWC8qgga2fgagyEnQ/yYafig=",
-			"path": "github.com/weaveworks/frankenstein/chunk",
-			"revision": "dd97445cc495bcce423ac0012b603b7947f62c74",
-			"revisionTime": "2016-09-21T13:58:14Z"
+			"checksumSHA1": "q+hnKHcLmPonioCtOdaG66TNOio=",
+			"path": "github.com/weaveworks/prism/chunk",
+			"revision": "1ef7a953ac8e76942fabcb1d97b59ebdab234dc8",
+			"revisionTime": "2016-09-21T14:58:46Z",
+			"version": "frankenprism",
+			"versionExact": "frankenprism"
 		},
 		{
-			"checksumSHA1": "5JI1FZsUmPl7YbDR0b7b54Vn9Ug=",
-			"path": "github.com/weaveworks/frankenstein/user",
-			"revision": "dd97445cc495bcce423ac0012b603b7947f62c74",
-			"revisionTime": "2016-09-21T13:58:14Z"
+			"checksumSHA1": "L+h5rbUj5n5micxPU0bvSNC3oiY=",
+			"path": "github.com/weaveworks/prism/user",
+			"revision": "1ef7a953ac8e76942fabcb1d97b59ebdab234dc8",
+			"revisionTime": "2016-09-21T14:58:46Z",
+			"version": "frankenprism",
+			"versionExact": "frankenprism"
 		},
 		{
 			"checksumSHA1": "JFs4F/B0Fnvx+PzYKN8+ABAHLnE=",

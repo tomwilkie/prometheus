@@ -313,18 +313,14 @@
 		{
 			"checksumSHA1": "q+hnKHcLmPonioCtOdaG66TNOio=",
 			"path": "github.com/weaveworks/prism/chunk",
-			"revision": "1ef7a953ac8e76942fabcb1d97b59ebdab234dc8",
-			"revisionTime": "2016-09-21T14:58:46Z",
-			"version": "frankenprism",
-			"versionExact": "frankenprism"
+			"revision": "0f685144dcbffd4effc9db1237f0f8f02ad4145c",
+			"revisionTime": "2016-09-21T16:03:48Z"
 		},
 		{
 			"checksumSHA1": "L+h5rbUj5n5micxPU0bvSNC3oiY=",
 			"path": "github.com/weaveworks/prism/user",
-			"revision": "1ef7a953ac8e76942fabcb1d97b59ebdab234dc8",
-			"revisionTime": "2016-09-21T14:58:46Z",
-			"version": "frankenprism",
-			"versionExact": "frankenprism"
+			"revision": "0f685144dcbffd4effc9db1237f0f8f02ad4145c",
+			"revisionTime": "2016-09-21T16:03:48Z"
 		},
 		{
 			"checksumSHA1": "JFs4F/B0Fnvx+PzYKN8+ABAHLnE=",

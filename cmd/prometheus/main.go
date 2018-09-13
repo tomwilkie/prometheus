@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Dieterbe/profiletrigger/heap"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/oklog/oklog/pkg/group"
@@ -233,6 +234,16 @@ func main() {
 		func(err error) {
 			level.Error(log.With(logger, "component", "k8s_client_runtime")).Log("err", err)
 		},
+	}
+
+	{
+		// Do a heap dump every 60s, when process virtual memory goes over 70GB.
+		h, err := heap.New("/prometheus-data", 70*1e9, 60, 1*time.Second, nil)
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to init heap analyser", "err", err)
+			os.Exit(1)
+		}
+		go h.Run()
 	}
 
 	level.Info(logger).Log("msg", "Starting Prometheus", "version", version.Info())

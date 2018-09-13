@@ -1,0 +1,14 @@
+{
+	"ImportPath": "github.com/prometheus/prometheus",
+	"GoVersion": "go1.11",
+	"GodepVersion": "v80",
+	"Packages": [
+		"github.com/Dieterbe/profiletrigger/heap"
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/Dieterbe/profiletrigger/heap",
+			"Rev": "c507ee16f324a7fac721cda98a75e2b9596b7d0e"
+		}
+	]
+}

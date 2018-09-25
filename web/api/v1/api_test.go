@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-kit/kit/log"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -29,6 +28,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-kit/kit/log"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
@@ -220,11 +221,11 @@ func TestEndpoints(t *testing.T) {
 			QueryEngine:           suite.QueryEngine(),
 			targetRetriever:       testTargetRetriever{},
 			alertmanagerRetriever: testAlertmanagerRetriever{},
-			now:            func() time.Time { return now },
-			config:         func() config.Config { return samplePrometheusCfg },
-			flagsMap:       sampleFlagMap,
-			ready:          func(f http.HandlerFunc) http.HandlerFunc { return f },
-			rulesRetriever: algr,
+			now:                   func() time.Time { return now },
+			config:                func() config.Config { return samplePrometheusCfg },
+			flagsMap:              sampleFlagMap,
+			ready:                 func(f http.HandlerFunc) http.HandlerFunc { return f },
+			rulesRetriever:        algr,
 		}
 
 		testEndpoints(t, api, true)
@@ -273,11 +274,11 @@ func TestEndpoints(t *testing.T) {
 			QueryEngine:           suite.QueryEngine(),
 			targetRetriever:       testTargetRetriever{},
 			alertmanagerRetriever: testAlertmanagerRetriever{},
-			now:            func() time.Time { return now },
-			config:         func() config.Config { return samplePrometheusCfg },
-			flagsMap:       sampleFlagMap,
-			ready:          func(f http.HandlerFunc) http.HandlerFunc { return f },
-			rulesRetriever: algr,
+			now:                   func() time.Time { return now },
+			config:                func() config.Config { return samplePrometheusCfg },
+			flagsMap:              sampleFlagMap,
+			ready:                 func(f http.HandlerFunc) http.HandlerFunc { return f },
+			rulesRetriever:        algr,
 		}
 
 		testEndpoints(t, api, false)
@@ -897,7 +898,7 @@ func TestReadEndpoint(t *testing.T) {
 					{Name: "d", Value: "e"},
 					{Name: "foo", Value: "bar"},
 				},
-				Samples: []*prompb.Sample{{Value: 1, Timestamp: 0}},
+				Samples: []prompb.Sample{{Value: 1, Timestamp: 0}},
 			},
 		},
 	}

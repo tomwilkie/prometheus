@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Dieterbe/profiletrigger/heap"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/oklog/oklog/pkg/group"
@@ -240,6 +241,17 @@ func main() {
 	level.Info(logger).Log("host_details", prom_runtime.Uname())
 	level.Info(logger).Log("fd_limits", prom_runtime.FdLimits())
 	level.Info(logger).Log("vm_limits", prom_runtime.VmLimits())
+
+	{
+		trigger, _ := heap.New(heap.Config{
+			Path:           "/prometheusdata",
+			AllocThreshold: 60 * 1e9,
+			RSSThreshold:   60 * 1e9,
+			MinTimeDiff:    time.Duration(10) * time.Second,
+			CheckEvery:     time.Duration(1) * time.Second,
+		}, nil)
+		go trigger.Run()
+	}
 
 	var (
 		localStorage  = &tsdb.ReadyStorage{}

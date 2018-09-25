@@ -51,6 +51,12 @@
 			"revisionTime": "2018-05-02T23:02:43Z"
 		},
 		{
+			"checksumSHA1": "pBD4n8XCsBmWjri/dCoXDbxuRcA=",
+			"path": "github.com/Dieterbe/profiletrigger/heap",
+			"revision": "3fa6d10b60f8edf1d1081b361112bf42d665f9b8",
+			"revisionTime": "2018-09-17T13:32:00Z"
+		},
+		{
 			"checksumSHA1": "KmjnydoAbofMieIWm+it5OWERaM=",
 			"path": "github.com/alecthomas/template",
 			"revision": "a0175ee3bccc567396460bf5acd36800cb10c49c",

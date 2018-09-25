@@ -898,7 +898,7 @@ func TestReadEndpoint(t *testing.T) {
 					{Name: "d", Value: "e"},
 					{Name: "foo", Value: "bar"},
 				},
-				Samples: []*prompb.Sample{{Value: 1, Timestamp: 0}},
+				Samples: []prompb.Sample{{Value: 1, Timestamp: 0}},
 			},
 		},
 	}

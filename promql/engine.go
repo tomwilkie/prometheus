@@ -167,7 +167,7 @@ type Engine struct {
 	logger  log.Logger
 	metrics *engineMetrics
 	timeout time.Duration
-	gate    *queryGate
+	gate    *QueryGate
 }
 
 // NewEngine returns a new engine.
@@ -231,7 +231,7 @@ func NewEngine(logger log.Logger, reg prometheus.Registerer, maxConcurrent int, 
 		)
 	}
 	return &Engine{
-		gate:    newQueryGate(maxConcurrent),
+		gate:    NewQueryGate(maxConcurrent),
 		timeout: timeout,
 		logger:  logger,
 		metrics: metrics,
@@ -1700,21 +1700,21 @@ func shouldDropMetricName(op ItemType) bool {
 // series is considered stale.
 var LookbackDelta = 5 * time.Minute
 
-// A queryGate controls the maximum number of concurrently running and waiting queries.
-type queryGate struct {
+// A QueryGate controls the maximum number of concurrently running and waiting queries.
+type QueryGate struct {
 	ch chan struct{}
 }
 
-// newQueryGate returns a query gate that limits the number of queries
+// NewQueryGate returns a query gate that limits the number of queries
 // being concurrently executed.
-func newQueryGate(length int) *queryGate {
-	return &queryGate{
+func NewQueryGate(length int) *QueryGate {
+	return &QueryGate{
 		ch: make(chan struct{}, length),
 	}
 }
 
 // Start blocks until the gate has a free spot or the context is done.
-func (g *queryGate) Start(ctx context.Context) error {
+func (g *QueryGate) Start(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return contextDone(ctx, "query queue")
@@ -1724,7 +1724,7 @@ func (g *queryGate) Start(ctx context.Context) error {
 }
 
 // Done releases a single spot in the gate.
-func (g *queryGate) Done() {
+func (g *QueryGate) Done() {
 	select {
 	case <-g.ch:
 	default:

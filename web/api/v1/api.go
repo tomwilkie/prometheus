@@ -131,10 +131,11 @@ type API struct {
 	flagsMap              map[string]string
 	ready                 func(http.HandlerFunc) http.HandlerFunc
 
-	db              func() *tsdb.DB
-	enableAdmin     bool
-	logger          log.Logger
-	remoteReadLimit int
+	db                    func() *tsdb.DB
+	enableAdmin           bool
+	logger                log.Logger
+	remoteReadSampleLimit int
+	remoteReadGate        *promql.QueryGate
 }
 
 // NewAPI returns an initialized API type.
@@ -150,7 +151,8 @@ func NewAPI(
 	enableAdmin bool,
 	logger log.Logger,
 	rr rulesRetriever,
-	remoteReadLimit int,
+	remoteReadSampleLimit int,
+	remoteReadConcurrencyLimit int,
 ) *API {
 	return &API{
 		QueryEngine:           qe,
@@ -158,15 +160,16 @@ func NewAPI(
 		targetRetriever:       tr,
 		alertmanagerRetriever: ar,
 
-		now:             time.Now,
-		config:          configFunc,
-		flagsMap:        flagsMap,
-		ready:           readyFunc,
-		db:              db,
-		enableAdmin:     enableAdmin,
-		rulesRetriever:  rr,
-		remoteReadLimit: remoteReadLimit,
-		logger:          logger,
+		now:                   time.Now,
+		config:                configFunc,
+		flagsMap:              flagsMap,
+		ready:                 readyFunc,
+		db:                    db,
+		enableAdmin:           enableAdmin,
+		rulesRetriever:        rr,
+		remoteReadSampleLimit: remoteReadSampleLimit,
+		remoteReadGate:        promql.NewQueryGate(remoteReadConcurrencyLimit),
+		logger:                logger,
 	}
 }
 
@@ -751,6 +754,9 @@ func (api *API) serveFlags(r *http.Request) (interface{}, *apiError, func()) {
 }
 
 func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) {
+	api.remoteReadGate.Start(r.Context())
+	defer api.remoteReadGate.Done()
+
 	req, err := remote.DecodeReadRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -798,7 +804,7 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		resp.Results[i], err = remote.ToQueryResult(set, api.remoteReadLimit)
+		resp.Results[i], err = remote.ToQueryResult(set, api.remoteReadSampleLimit)
 		if err != nil {
 			if httpErr, ok := err.(remote.HTTPError); ok {
 				http.Error(w, httpErr.Error(), httpErr.Status())

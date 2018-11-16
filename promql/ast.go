@@ -133,6 +133,7 @@ type MatrixSelector struct {
 	LabelMatchers []*labels.Matcher
 
 	// The series are populated at query preparation time.
+	set    storage.SeriesSet
 	series []storage.Series
 }
 
@@ -166,6 +167,7 @@ type VectorSelector struct {
 	LabelMatchers []*labels.Matcher
 
 	// The series are populated at query preparation time.
+	set    storage.SeriesSet
 	series []storage.Series
 }
 

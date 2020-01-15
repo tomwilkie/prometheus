@@ -527,7 +527,7 @@ func durationMilliseconds(d time.Duration) int64 {
 // execEvalStmt evaluates the expression of an evaluation statement for the given time range.
 func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.EvalStmt) (parser.Value, storage.Warnings, error) {
 	prepareSpanTimer, ctxPrepare := query.stats.GetSpanTimer(ctx, stats.QueryPreparationTime, ng.metrics.queryPrepareTime)
-	mint, maxt := ng.findMinMaxTime(s)
+	mint, maxt := ng.FindMinMaxTime(s)
 	querier, err := query.queryable.Querier(ctxPrepare, mint, maxt)
 	if err != nil {
 		prepareSpanTimer.Finish()
@@ -659,7 +659,7 @@ func subqueryTimes(path []parser.Node) (time.Duration, time.Duration, *int64) {
 	return subqOffset, subqRange, tsp
 }
 
-func (ng *Engine) findMinMaxTime(s *parser.EvalStmt) (int64, int64) {
+func (ng *Engine) FindMinMaxTime(s *parser.EvalStmt) (int64, int64) {
 	var minTimestamp, maxTimestamp int64 = math.MaxInt64, math.MinInt64
 	// Whenever a MatrixSelector is evaluated, evalRange is set to the corresponding range.
 	// The evaluation of the VectorSelector inside then evaluates the given range and unsets

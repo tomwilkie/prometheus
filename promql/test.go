@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 
+	"github.com/prometheus/prometheus/pkg/exemplar"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql/parser"
@@ -56,7 +57,8 @@ type Test struct {
 
 	cmds []testCommand
 
-	storage *teststorage.TestStorage
+	storage         *teststorage.TestStorage
+	exemplarStorage storage.ExemplarStorage
 
 	queryEngine *Engine
 	context     context.Context
@@ -66,8 +68,9 @@ type Test struct {
 // NewTest returns an initialized empty Test.
 func NewTest(t testutil.T, input string) (*Test, error) {
 	test := &Test{
-		T:    t,
-		cmds: []testCommand{},
+		T:               t,
+		cmds:            []testCommand{},
+		exemplarStorage: tsdb.NewCircularExemplarStorage(10),
 	}
 	err := test.parse(input)
 	test.clear()
@@ -106,6 +109,11 @@ func (t *Test) Storage() storage.Storage {
 // TSDB returns test's TSDB.
 func (t *Test) TSDB() *tsdb.DB {
 	return t.storage.DB
+}
+
+// ExemplarStorage returns the test's exemplar storage.
+func (t *Test) ExemplarStorage() storage.ExemplarStorage {
+	return t.exemplarStorage
 }
 
 func raise(line int, format string, v ...interface{}) error {
@@ -265,16 +273,18 @@ func (*evalCmd) testCmd()  {}
 // loadCmd is a command that loads sequences of sample values for specific
 // metrics into the storage.
 type loadCmd struct {
-	gap     time.Duration
-	metrics map[uint64]labels.Labels
-	defs    map[uint64][]Point
+	gap       time.Duration
+	metrics   map[uint64]labels.Labels
+	defs      map[uint64][]Point
+	exemplars map[uint64][]exemplar.Exemplar
 }
 
 func newLoadCmd(gap time.Duration) *loadCmd {
 	return &loadCmd{
-		gap:     gap,
-		metrics: map[uint64]labels.Labels{},
-		defs:    map[uint64][]Point{},
+		gap:       gap,
+		metrics:   map[uint64]labels.Labels{},
+		defs:      map[uint64][]Point{},
+		exemplars: map[uint64][]exemplar.Exemplar{},
 	}
 }
 

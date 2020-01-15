@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/go-kit/kit/log"
+	"github.com/prometheus/prometheus/pkg/exemplar"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage"
@@ -135,4 +136,14 @@ func (*mockAppendable) AddFast(uint64, int64, float64) error {
 
 func (*mockAppendable) Rollback() error {
 	return fmt.Errorf("not implemented")
+}
+
+func (*mockAppendable) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
+	// noop until we implement exemplars over remote write
+	return nil
+}
+
+func (*mockAppendable) AddExemplarFast(ref uint64, t int64, v float64, e exemplar.Exemplar) error {
+	// noop until we implement exemplars over remote write
+	return nil
 }

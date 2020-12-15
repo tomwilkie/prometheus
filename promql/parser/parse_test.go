@@ -22,7 +22,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -3368,18 +3367,18 @@ func TestExtractSelectors(t *testing.T) {
 		},
 	} {
 		expr, err := ParseExpr(tc.input)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		var expected [][]*labels.Matcher
 		for _, s := range tc.expected {
 			selector, err := ParseMetricSelector(s)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			expected = append(expected, selector)
 		}
 
 		actual, err := ExtractSelectors(expr)
-		assert.NoError(t, err)
-		assert.Equal(t, expected, actual)
+		require.NoError(t, err)
+		require.Equal(t, expected, actual)
 	}
 }

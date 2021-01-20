@@ -59,8 +59,8 @@ func TestAddExemplar(t *testing.T) {
 	err = es.AddExemplar(l, 3, e2)
 	require.NoError(t, err)
 	require.Equal(t, es.index[l.String()], 1, "exemplar was not stored correctly, location of newest exemplar for series in index did not update")
-	require.True(t, es.exemplars[es.index[l.String()]].Exemplar().Equals(e2), "exemplar was not stored correctly, expected %+v got: %+v", e2, es.exemplars[es.index[l.String()]].Exemplar())
-	require.True(t, es.exemplars[es.index[l.String()]].se.scrapeTimestamp == 3, "exemplar was not stored correctly, scrape timestamp was not correct")
+	require.True(t, es.exemplars[es.index[l.String()]].exemplar.Equals(e2), "exemplar was not stored correctly, expected %+v got: %+v", e2, es.exemplars[es.index[l.String()]].exemplar)
+	require.True(t, es.exemplars[es.index[l.String()]].scrapeTimestamp == 3, "exemplar was not stored correctly, scrape timestamp was not correct")
 }
 
 func TestAddDuplicateExemplar(t *testing.T) {
@@ -93,7 +93,7 @@ func TestAddDuplicateExemplar(t *testing.T) {
 	}
 
 	es.AddExemplar(l, 0, e)
-	require.True(t, reflect.DeepEqual(es.exemplars[0].Exemplar(), e), "exemplar was not stored correctly")
+	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
 	err := es.AddExemplar(l, 0, e2)
 	require.Error(t, err, "no error when attempting to add duplicate exemplar")
@@ -130,7 +130,7 @@ func TestAddOutOfOrderExemplar(t *testing.T) {
 	}
 
 	es.AddExemplar(l, 0, e)
-	require.True(t, reflect.DeepEqual(es.exemplars[0].Exemplar(), e), "exemplar was not stored correctly")
+	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
 	err := es.AddExemplar(l, 0, e2)
 	require.Error(t, err, "no error when attempting to add out of order exemplar")
@@ -209,7 +209,7 @@ func TestAddExtraExemplar(t *testing.T) {
 	for _, e := range exemplars {
 		es.AddExemplar(l, e.Ts-1, e)
 	}
-	require.True(t, reflect.DeepEqual(es.exemplars[0].Exemplar(), exemplars[5]), "exemplar was not stored correctly")
+	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, exemplars[5]), "exemplar was not stored correctly")
 }
 
 func TestSelectExemplar(t *testing.T) {
@@ -230,7 +230,7 @@ func TestSelectExemplar(t *testing.T) {
 	}
 
 	es.AddExemplar(l, 0, e)
-	require.True(t, reflect.DeepEqual(es.exemplars[0].Exemplar(), e), "exemplar was not stored correctly")
+	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
 	exemplars, err := es.Select(0, 100, l)
 	require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestSelectExemplarOrdering(t *testing.T) {
 	for _, e := range exemplars {
 		es.AddExemplar(l, e.Ts-1, e)
 	}
-	require.True(t, reflect.DeepEqual(es.exemplars[0].Exemplar(), exemplars[5]), "exemplar was not stored correctly")
+	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, exemplars[5]), "exemplar was not stored correctly")
 
 	ret, err := es.Select(100, 110, l)
 	require.NoError(t, err)
@@ -389,76 +389,56 @@ func TestSelectExemplar_OverwriteLoop(t *testing.T) {
 
 	es.index[l1.String()] = 0
 	es.exemplars[0] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l1,
-			scrapeTimestamp: 4,
-		},
-		prev: 6,
+		seriesLabels:    l1,
+		scrapeTimestamp: 4,
+		prev:            6,
 	}
 	es.exemplars[6] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l1,
-			scrapeTimestamp: 3,
-		},
-		prev: 2,
+		seriesLabels:    l1,
+		scrapeTimestamp: 3,
+		prev:            2,
 	}
 
 	es.index[l2.String()] = 2
 	es.exemplars[2] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l2,
-			scrapeTimestamp: 10,
-		},
-		prev: 1,
+		seriesLabels:    l2,
+		scrapeTimestamp: 10,
+		prev:            1,
 	}
 	es.exemplars[1] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l2,
-			scrapeTimestamp: 9,
-		},
-		prev: 9,
+		seriesLabels:    l2,
+		scrapeTimestamp: 9,
+		prev:            9,
 	}
 	es.exemplars[9] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l2,
-			scrapeTimestamp: 8,
-		},
-		prev: 8,
+		seriesLabels:    l2,
+		scrapeTimestamp: 8,
+		prev:            8,
 	}
 	es.exemplars[8] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l2,
-			scrapeTimestamp: 7,
-		},
-		prev: 7,
+		seriesLabels:    l2,
+		scrapeTimestamp: 7,
+		prev:            7,
 	}
 	es.exemplars[7] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l2,
-			scrapeTimestamp: 6,
-		},
-		prev: 5,
+		seriesLabels:    l2,
+		scrapeTimestamp: 6,
+		prev:            5,
 	}
 	es.exemplars[5] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l2,
-			scrapeTimestamp: 5,
-		},
-		prev: 4,
+		seriesLabels:    l2,
+		scrapeTimestamp: 5,
+		prev:            4,
 	}
 	es.exemplars[4] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l2,
-			scrapeTimestamp: 4,
-		},
-		prev: 3,
+		seriesLabels:    l2,
+		scrapeTimestamp: 4,
+		prev:            3,
 	}
 	es.exemplars[3] = &circularBufferEntry{
-		se: storageExemplar{
-			seriesLabels:    l2,
-			scrapeTimestamp: 3,
-		},
-		prev: 1,
+		seriesLabels:    l2,
+		scrapeTimestamp: 3,
+		prev:            1,
 	}
 
 	el, err := es.Select(0, 100, l2)

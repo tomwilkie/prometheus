@@ -58,18 +58,10 @@ type CircularExemplarStorage struct {
 }
 
 type circularBufferEntry struct {
-	se   storageExemplar
-	prev int // index of previous exemplar in circular for the same series, use -1 as a default for new entries
-}
-
-func (ce circularBufferEntry) Exemplar() exemplar.Exemplar {
-	return ce.se.exemplar
-}
-
-type storageExemplar struct {
 	exemplar        exemplar.Exemplar
 	seriesLabels    labels.Labels
 	scrapeTimestamp int64
+	prev            int // index of previous exemplar in circular for the same series, use -1 as a default for new entries
 }
 
 // If we assume the average case 95 bytes per exemplar we can fit 5651272 exemplars in
@@ -112,7 +104,7 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 	if idx, ok = ce.index[l.String()]; !ok {
 		return nil, nil
 	}
-	lastTs := ce.exemplars[idx].se.scrapeTimestamp
+	lastTs := ce.exemplars[idx].scrapeTimestamp
 
 	for {
 		// We need the labels check here in case what was the previous exemplar for the series
@@ -120,17 +112,17 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 		// with an exemplar from another series.
 		// todo (callum) confirm if this check is still needed now that adding an exemplar should
 		// update the index and previous pointer for the series whose exemplar was overwritten.
-		if idx == -1 || string(ce.exemplars[idx].se.seriesLabels.Bytes(buf)) != string(l.Bytes(buf)) {
+		if idx == -1 || string(ce.exemplars[idx].seriesLabels.Bytes(buf)) != string(l.Bytes(buf)) {
 			break
 		}
 
-		e = ce.exemplars[idx].Exemplar()
+		e = ce.exemplars[idx].exemplar
 		// todo (callum) This line is needed to avoid an infinite loop, consider redesign of buffer entry struct.
-		if ce.exemplars[idx].se.scrapeTimestamp > lastTs {
+		if ce.exemplars[idx].scrapeTimestamp > lastTs {
 			break
 		}
 
-		lastTs = ce.exemplars[idx].se.scrapeTimestamp
+		lastTs = ce.exemplars[idx].scrapeTimestamp
 		if e.Ts >= start && e.Ts <= end {
 			ret = append(ret, e)
 		}
@@ -147,7 +139,7 @@ func (ce *CircularExemplarStorage) indexGcCheck(cbe *circularBufferEntry) {
 		return
 	}
 
-	l := cbe.se.seriesLabels
+	l := cbe.seriesLabels
 	i := cbe.prev
 	if cbe.prev == -1 {
 		delete(ce.index, l.String())
@@ -155,9 +147,9 @@ func (ce *CircularExemplarStorage) indexGcCheck(cbe *circularBufferEntry) {
 	}
 
 	if ce.exemplars[ce.nextIndex] != nil {
-		l2 := ce.exemplars[i].se.seriesLabels
+		l2 := ce.exemplars[i].seriesLabels
 		if !labels.Equal(l2, l) { // No more exemplars for series l.
-			delete(ce.index, cbe.se.seriesLabels.String())
+			delete(ce.index, cbe.seriesLabels.String())
 			return
 		}
 		// There's still at least one exemplar for the series l, so we can update the index.
@@ -176,12 +168,10 @@ func (ce *CircularExemplarStorage) addExemplar(l labels.Labels, t int64, e exemp
 		// Default the prev value to -1 (which we use to detect that we've iterated through all exemplars for a series in Select)
 		// since this is the first exemplar stored for this series.
 		ce.exemplars[ce.nextIndex] = &circularBufferEntry{
-			se: storageExemplar{
-				exemplar:        e,
-				seriesLabels:    l,
-				scrapeTimestamp: t,
-			},
-			prev: -1}
+			exemplar:        e,
+			seriesLabels:    l,
+			scrapeTimestamp: t,
+			prev:            -1}
 		ce.index[seriesLabels] = ce.nextIndex
 		ce.nextIndex++
 		if ce.nextIndex >= cap(ce.exemplars) {
@@ -191,22 +181,20 @@ func (ce *CircularExemplarStorage) addExemplar(l labels.Labels, t int64, e exemp
 	}
 
 	// Check for duplicate vs last stored exemplar for this series.
-	if ce.exemplars[idx].Exemplar().Equals(e) {
+	if ce.exemplars[idx].exemplar.Equals(e) {
 		ce.metrics.duplicateExemplars.Inc()
 		return storage.ErrDuplicateExemplar
 	}
-	if e.Ts <= ce.exemplars[idx].se.scrapeTimestamp || t <= ce.exemplars[idx].se.scrapeTimestamp {
+	if e.Ts <= ce.exemplars[idx].scrapeTimestamp || t <= ce.exemplars[idx].scrapeTimestamp {
 		ce.metrics.outOfOrderExemplars.Inc()
 		return storage.ErrOutOfOrderExemplar
 	}
 	ce.indexGcCheck(ce.exemplars[ce.nextIndex])
 	ce.exemplars[ce.nextIndex] = &circularBufferEntry{
-		se: storageExemplar{
-			exemplar:        e,
-			seriesLabels:    l,
-			scrapeTimestamp: t,
-		},
-		prev: idx}
+		exemplar:        e,
+		seriesLabels:    l,
+		scrapeTimestamp: t,
+		prev:            idx}
 	ce.index[seriesLabels] = ce.nextIndex
 	ce.nextIndex++
 	if ce.nextIndex >= cap(ce.exemplars) {

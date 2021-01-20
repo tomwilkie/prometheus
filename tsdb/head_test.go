@@ -50,7 +50,7 @@ func newTestHead(t testing.TB, chunkRange int64, compressWAL bool) (*Head, *wal.
 	opts := DefaultHeadOptions()
 	opts.ChunkRange = chunkRange
 	opts.ChunkDirRoot = dir
-	h, err := NewHead(nil, nil, wlog, opts)
+	h, err := NewHead(nil, nil, wlog, 1, opts)
 	require.NoError(t, err)
 
 	require.NoError(t, h.chunkDiskMapper.IterateAllChunks(func(_, _ uint64, _, _ int64, _ uint16) error { return nil }))
@@ -197,7 +197,7 @@ func BenchmarkLoadWAL(b *testing.B) {
 					opts := DefaultHeadOptions()
 					opts.ChunkRange = 1000
 					opts.ChunkDirRoot = w.Dir()
-					h, err := NewHead(nil, nil, w, opts)
+					h, err := NewHead(nil, nil, w, 1, opts)
 					require.NoError(b, err)
 					h.Init(0)
 				}
@@ -311,7 +311,7 @@ func TestHead_WALMultiRef(t *testing.T) {
 	opts := DefaultHeadOptions()
 	opts.ChunkRange = 1000
 	opts.ChunkDirRoot = w.Dir()
-	head, err = NewHead(nil, nil, w, opts)
+	head, err = NewHead(nil, nil, w, 1, opts)
 	require.NoError(t, err)
 	require.NoError(t, head.Init(0))
 	defer func() {
@@ -595,7 +595,7 @@ func TestHeadDeleteSimple(t *testing.T) {
 				opts := DefaultHeadOptions()
 				opts.ChunkRange = 1000
 				opts.ChunkDirRoot = reloadedW.Dir()
-				reloadedHead, err := NewHead(nil, nil, reloadedW, opts)
+				reloadedHead, err := NewHead(nil, nil, reloadedW, 1, opts)
 				require.NoError(t, err)
 				require.NoError(t, reloadedHead.Init(0))
 
@@ -1280,7 +1280,7 @@ func TestWalRepair_DecodingError(t *testing.T) {
 					opts := DefaultHeadOptions()
 					opts.ChunkRange = 1
 					opts.ChunkDirRoot = w.Dir()
-					h, err := NewHead(nil, nil, w, opts)
+					h, err := NewHead(nil, nil, w, 1, opts)
 					require.NoError(t, err)
 					require.Equal(t, 0.0, prom_testutil.ToFloat64(h.metrics.walCorruptionsTotal))
 					initErr := h.Init(math.MinInt64)
@@ -1338,7 +1338,7 @@ func TestHeadReadWriterRepair(t *testing.T) {
 		opts := DefaultHeadOptions()
 		opts.ChunkRange = chunkRange
 		opts.ChunkDirRoot = dir
-		h, err := NewHead(nil, nil, w, opts)
+		h, err := NewHead(nil, nil, w, 1, opts)
 		require.NoError(t, err)
 		require.Equal(t, 0.0, prom_testutil.ToFloat64(h.metrics.mmapChunkCorruptionTotal))
 		require.NoError(t, h.Init(math.MinInt64))
@@ -1571,7 +1571,7 @@ func TestMemSeriesIsolation(t *testing.T) {
 	opts := DefaultHeadOptions()
 	opts.ChunkRange = 1000
 	opts.ChunkDirRoot = wlog.Dir()
-	hb, err = NewHead(nil, nil, wlog, opts)
+	hb, err = NewHead(nil, nil, wlog, 1, opts)
 	defer func() { require.NoError(t, hb.Close()) }()
 	require.NoError(t, err)
 	require.NoError(t, hb.Init(0))

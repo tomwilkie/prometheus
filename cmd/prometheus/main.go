@@ -417,11 +417,10 @@ func main() {
 	level.Info(logger).Log("vm_limits", prom_runtime.VMLimits())
 
 	var (
-		localStorage    = &readyStorage{}
-		scraper         = &readyScrapeManager{}
-		remoteStorage   = remote.NewStorage(log.With(logger, "component", "remote"), prometheus.DefaultRegisterer, localStorage.StartTime, cfg.localStoragePath, time.Duration(cfg.RemoteFlushDeadline), scraper)
-		fanoutStorage   = storage.NewFanout(logger, localStorage, remoteStorage)
-		exemplarStorage = tsdb.NewCircularExemplarStorage(cfg.ExemplarsLimit)
+		localStorage  = &readyStorage{}
+		scraper       = &readyScrapeManager{}
+		remoteStorage = remote.NewStorage(log.With(logger, "component", "remote"), prometheus.DefaultRegisterer, localStorage.StartTime, cfg.localStoragePath, time.Duration(cfg.RemoteFlushDeadline), scraper)
+		fanoutStorage = storage.NewFanout(logger, localStorage, remoteStorage)
 	)
 
 	var (
@@ -436,7 +435,7 @@ func main() {
 		ctxNotify, cancelNotify = context.WithCancel(context.Background())
 		discoveryManagerNotify  = discovery.NewManager(ctxNotify, log.With(logger, "component", "discovery manager notify"), discovery.Name("notify"))
 
-		scrapeManager = scrape.NewManager(log.With(logger, "component", "scrape manager"), fanoutStorage, exemplarStorage)
+		scrapeManager = scrape.NewManager(log.With(logger, "component", "scrape manager"), fanoutStorage)
 
 		opts = promql.EngineOpts{
 			Logger:                   log.With(logger, "component", "query engine"),
@@ -490,7 +489,6 @@ func main() {
 	}
 
 	cfg.web.Flags = map[string]string{}
-	cfg.web.ExemplarStorage = exemplarStorage
 
 	// Exclude kingpin default flags to expose only Prometheus ones.
 	boilerplateFlags := kingpin.New("", "").Version("")
@@ -821,7 +819,6 @@ func main() {
 				startTimeMargin := int64(2 * time.Duration(cfg.tsdb.MinBlockDuration).Seconds() * 1000)
 				localStorage.Set(db, startTimeMargin)
 				// todo: which context to pass? (callum)
-				exemplarStorage.SetSecondaries(db.ExemplarAppender(context.TODO()))
 				close(dbOpen)
 				<-cancel
 				return nil
@@ -1212,6 +1209,7 @@ type tsdbOptions struct {
 	StripeSize             int
 	MinBlockDuration       model.Duration
 	MaxBlockDuration       model.Duration
+	MaxExemplars           int
 }
 
 func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
@@ -1225,6 +1223,7 @@ func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
 		StripeSize:             opts.StripeSize,
 		MinBlockDuration:       int64(time.Duration(opts.MinBlockDuration) / time.Millisecond),
 		MaxBlockDuration:       int64(time.Duration(opts.MaxBlockDuration) / time.Millisecond),
+		MaxExemplars:           opts.MaxExemplars,
 	}
 }
 

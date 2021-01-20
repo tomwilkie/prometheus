@@ -64,6 +64,7 @@ type Head struct {
 	metrics       *headMetrics
 	opts          *HeadOptions
 	wal           *wal.WAL
+	exemplars     *CircularExemplarStorage
 	logger        log.Logger
 	appendPool    sync.Pool
 	exemplarsPool sync.Pool
@@ -317,7 +318,7 @@ func (h *Head) PostingsCardinalityStats(statsByLabelName string) *index.Postings
 }
 
 // NewHead opens the head block in dir.
-func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, opts *HeadOptions) (*Head, error) {
+func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars int, opts *HeadOptions) (*Head, error) {
 	if l == nil {
 		l = log.NewNopLogger()
 	}
@@ -331,6 +332,7 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, opts *HeadOpti
 		wal:        wal,
 		logger:     l,
 		opts:       opts,
+		exemplars:  NewCircularExemplarStorage(numExemplars, r),
 		series:     newStripeSeries(opts.StripeSize, opts.SeriesCallback),
 		symbols:    map[string]struct{}{},
 		postings:   index.NewUnorderedMemPostings(),

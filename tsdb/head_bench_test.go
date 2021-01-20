@@ -35,7 +35,7 @@ func BenchmarkHeadStripeSeriesCreate(b *testing.B) {
 	opts := DefaultHeadOptions()
 	opts.ChunkRange = 1000
 	opts.ChunkDirRoot = chunkDir
-	h, err := NewHead(nil, nil, nil, opts)
+	h, err := NewHead(nil, nil, nil, 1, opts)
 	require.NoError(b, err)
 	defer h.Close()
 
@@ -54,7 +54,7 @@ func BenchmarkHeadStripeSeriesCreateParallel(b *testing.B) {
 	opts := DefaultHeadOptions()
 	opts.ChunkRange = 1000
 	opts.ChunkDirRoot = chunkDir
-	h, err := NewHead(nil, nil, nil, opts)
+	h, err := NewHead(nil, nil, nil, 1, opts)
 	require.NoError(b, err)
 	defer h.Close()
 

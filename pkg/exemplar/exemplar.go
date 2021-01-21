@@ -25,8 +25,33 @@ type Exemplar struct {
 	HasTs  bool          `json:"hasTimestamp"`
 }
 
+// ExemplarScrapeTimestamp is an exemplar with it's scrape timestamp.
+type ExemplarScrapeTimestamp struct {
+	Exemplar        Exemplar
+	ScrapeTimestamp int64
+}
+
 // Equals compares if the exemplar e is the same as e2.
 func (e Exemplar) Equals(e2 Exemplar) bool {
+	if e.Labels.String() != e2.Labels.String() {
+		return false
+	}
+
+	if e.Ts != e2.Ts {
+		return false
+	}
+
+	if e.Value != e2.Value {
+		return false
+	}
+
+	return true
+}
+
+// EqualsWithoutTimestamp compares if the exemplar e is the same as e2 but ignores
+// the Ts field of the exemplar. Useful when determining if exemplars are duplicates
+// from subsequent scrapes.
+func (e Exemplar) EqualsWithoutTimestamp(e2 Exemplar) bool {
 	if e.Labels.String() != e2.Labels.String() {
 		return false
 	}

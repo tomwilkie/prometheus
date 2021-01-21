@@ -144,8 +144,8 @@ type RuntimeInfo struct {
 }
 
 type exemplarData struct {
-	SeriesLabels labels.Labels       `json:"seriesLabels"`
-	Exemplars    []exemplar.Exemplar `json:"exemplars"`
+	SeriesLabels labels.Labels                      `json:"seriesLabels"`
+	Exemplars    []exemplar.ExemplarScrapeTimestamp `json:"exemplars"`
 }
 
 type response struct {

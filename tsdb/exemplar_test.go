@@ -144,7 +144,7 @@ func TestAddExtraExemplar(t *testing.T) {
 		{Name: "service", Value: "asdf"},
 	}
 	exemplars := []exemplar.Exemplar{
-		exemplar.Exemplar{
+		{
 			Labels: labels.Labels{
 				labels.Label{
 					Name:  "traceID",
@@ -154,7 +154,7 @@ func TestAddExtraExemplar(t *testing.T) {
 			Value: 0.1,
 			Ts:    101,
 		},
-		exemplar.Exemplar{
+		{
 			Labels: labels.Labels{
 				labels.Label{
 					Name:  "traceID",
@@ -164,7 +164,7 @@ func TestAddExtraExemplar(t *testing.T) {
 			Value: 0.2,
 			Ts:    102,
 		},
-		exemplar.Exemplar{
+		{
 			Labels: labels.Labels{
 				labels.Label{
 					Name:  "traceID",
@@ -174,7 +174,7 @@ func TestAddExtraExemplar(t *testing.T) {
 			Value: 0.3,
 			Ts:    103,
 		},
-		exemplar.Exemplar{
+		{
 			Labels: labels.Labels{
 				labels.Label{
 					Name:  "traceID",
@@ -184,7 +184,7 @@ func TestAddExtraExemplar(t *testing.T) {
 			Value: 0.4,
 			Ts:    104,
 		},
-		exemplar.Exemplar{
+		{
 			Labels: labels.Labels{
 				labels.Label{
 					Name:  "traceID",
@@ -194,7 +194,7 @@ func TestAddExtraExemplar(t *testing.T) {
 			Value: 0.5,
 			Ts:    105,
 		},
-		exemplar.Exemplar{
+		{
 			Labels: labels.Labels{
 				labels.Label{
 					Name:  "traceID",
@@ -229,13 +229,14 @@ func TestSelectExemplar(t *testing.T) {
 		HasTs: false,
 	}
 
-	es.AddExemplar(l, 0, e)
+	es.AddExemplar(l, 1, e)
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
 	exemplars, err := es.Select(0, 100, l)
 	require.NoError(t, err)
 
-	require.True(t, reflect.DeepEqual([]exemplar.Exemplar{e}, exemplars), "select did not return all exemplars")
+	expectedResult := []exemplar.ExemplarScrapeTimestamp{{Exemplar: e, ScrapeTimestamp: 1}}
+	require.True(t, reflect.DeepEqual(expectedResult, exemplars), "select did not return all exemplars")
 }
 
 func TestSelectExemplarOrdering(t *testing.T) {
@@ -244,73 +245,91 @@ func TestSelectExemplarOrdering(t *testing.T) {
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
 	}
-	exemplars := []exemplar.Exemplar{
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "a",
+	exemplars := []exemplar.ExemplarScrapeTimestamp{
+		{
+			exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "a",
+					},
 				},
+				Value: 0.1,
+				Ts:    101,
 			},
-			Value: 0.1,
-			Ts:    101,
+			100,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "b",
+		{
+			exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "b",
+					},
 				},
+				Value: 0.2,
+				Ts:    102,
 			},
-			Value: 0.2,
-			Ts:    102,
+			101,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "c",
+		{
+			exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "c",
+					},
 				},
+				Value: 0.3,
+				Ts:    103,
 			},
-			Value: 0.3,
-			Ts:    103,
+			102,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "d",
+		{
+			exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "d",
+					},
 				},
+				Value: 0.4,
+				Ts:    104,
 			},
-			Value: 0.4,
-			Ts:    104,
+			103,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "e",
+		{
+			exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "e",
+					},
 				},
+				Value: 0.5,
+				Ts:    105,
 			},
-			Value: 0.5,
-			Ts:    105,
+			104,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "f",
+		{
+			Exemplar: exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "f",
+					},
 				},
+				Value: 0.6,
+				Ts:    106,
 			},
-			Value: 0.6,
-			Ts:    106,
+			ScrapeTimestamp: 105,
 		},
 	}
 
 	for _, e := range exemplars {
-		es.AddExemplar(l, e.Ts-1, e)
+		es.AddExemplar(l, e.ScrapeTimestamp, e.Exemplar)
 	}
-	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, exemplars[5]), "exemplar was not stored correctly")
+	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, exemplars[5].Exemplar), "exemplar was not stored correctly")
 
 	ret, err := es.Select(100, 110, l)
 	require.NoError(t, err)
@@ -324,41 +343,50 @@ func TestSelectExemplar_Circ(t *testing.T) {
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
 	}
-	exemplars := []exemplar.Exemplar{
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "qwerty",
+	exemplars := []exemplar.ExemplarScrapeTimestamp{
+		{
+			Exemplar: exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "qwerty",
+					},
 				},
+				Value: 0.1,
+				Ts:    101,
 			},
-			Value: 0.1,
-			Ts:    101,
+			ScrapeTimestamp: 100,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "zxcvbn",
+		{
+			Exemplar: exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "zxcvbn",
+					},
 				},
+				Value: 0.1,
+				Ts:    102,
 			},
-			Value: 0.1,
-			Ts:    102,
+			ScrapeTimestamp: 101,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "asdfgh",
+		{
+			Exemplar: exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "asdfgh",
+					},
 				},
+				Value: 0.1,
+				Ts:    103,
 			},
-			Value: 0.1,
-			Ts:    103,
+			ScrapeTimestamp: 102,
 		},
 	}
 
 	for i, e := range exemplars {
-		err := es.AddExemplar(l, e.Ts-1, e)
+		err := es.AddExemplar(l, e.ScrapeTimestamp, e.Exemplar)
 		require.NoError(t, err)
 		require.Equal(t, es.index[l.String()], i, "exemplar was not stored correctly")
 	}
@@ -368,7 +396,7 @@ func TestSelectExemplar_Circ(t *testing.T) {
 	require.True(t, len(el) == 3, "didn't get expected one exemplar")
 
 	for i := range exemplars {
-		require.True(t, el[i].Equals(exemplars[i]), "")
+		require.True(t, el[i].Exemplar.Equals(exemplars[i].Exemplar), "")
 	}
 }
 
@@ -453,51 +481,63 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
 	}
-	exemplars := []exemplar.Exemplar{
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "qwerty",
+	exemplars := []exemplar.ExemplarScrapeTimestamp{
+		{
+			Exemplar: exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "qwerty",
+					},
 				},
+				Value: 0.1,
+				Ts:    101,
 			},
-			Value: 0.1,
-			Ts:    101,
+			ScrapeTimestamp: 100,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "zxcvbn",
+		{
+			Exemplar: exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "zxcvbn",
+					},
 				},
+				Value: 0.1,
+				Ts:    102,
 			},
-			Value: 0.1,
-			Ts:    102,
+			ScrapeTimestamp: 101,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "asdfgh",
+		{
+			Exemplar: exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "asdfgh",
+					},
 				},
+				Value: 0.1,
+				Ts:    103,
 			},
-			Value: 0.1,
-			Ts:    103,
+			ScrapeTimestamp: 102,
 		},
-		exemplar.Exemplar{
-			Labels: labels.Labels{
-				labels.Label{
-					Name:  "traceID",
-					Value: "hjkl;",
+		{
+			Exemplar: exemplar.Exemplar{
+				Labels: labels.Labels{
+					labels.Label{
+						Name:  "traceID",
+						Value: "hjkl;",
+					},
 				},
+				Value: 0.1,
+				Ts:    106,
 			},
-			Value: 0.1,
-			Ts:    106,
+			ScrapeTimestamp: 105,
 		},
 	}
 
 	for i, e := range exemplars {
-		err := es.AddExemplar(l, e.Ts-1, e)
+		err := es.AddExemplar(l, e.ScrapeTimestamp, e.Exemplar)
 		require.NoError(t, err)
 		require.Equal(t, es.index[l.String()], i, "exemplar was not stored correctly")
 	}
@@ -506,8 +546,9 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, len(el) == 2, "didn't get expected one exemplar")
 
+	// todo: smelly
 	for i := range el {
-		require.True(t, el[i].Equals(exemplars[i+1]), "")
+		require.True(t, el[i].Exemplar.Equals(exemplars[i+2].Exemplar), "")
 	}
 }
 

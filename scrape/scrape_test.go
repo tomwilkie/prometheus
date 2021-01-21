@@ -1532,7 +1532,7 @@ func TestScrapeLoopAppendExemplar(t *testing.T) {
 			expLset:         labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
 			expValue:        0,
 			exemplar: []exemplar.Exemplar{
-				exemplar.Exemplar{Labels: labels.FromStrings("a", "abc"), Value: 1},
+				{Labels: labels.FromStrings("a", "abc"), Value: 1},
 			},
 		}, {
 			title:           "Metric with exemplars and TS",
@@ -1541,7 +1541,7 @@ func TestScrapeLoopAppendExemplar(t *testing.T) {
 			expLset:         labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
 			expValue:        0,
 			exemplar: []exemplar.Exemplar{
-				exemplar.Exemplar{Labels: labels.FromStrings("a", "abc"), Value: 1, Ts: 10000000, HasTs: true},
+				{Labels: labels.FromStrings("a", "abc"), Value: 1, Ts: 10000000, HasTs: true},
 			},
 		},
 	}

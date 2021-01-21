@@ -49,12 +49,11 @@ func newExemplarMetrics(r prometheus.Registerer) *exemplarMetrics {
 }
 
 type CircularExemplarStorage struct {
-	metrics     *exemplarMetrics
-	lock        sync.RWMutex
-	index       map[string]int
-	exemplars   []*circularBufferEntry
-	nextIndex   int
-	secondaries []storage.ExemplarAppender
+	metrics   *exemplarMetrics
+	lock      sync.RWMutex
+	index     map[string]int
+	exemplars []*circularBufferEntry
+	nextIndex int
 }
 
 type circularBufferEntry struct {
@@ -66,12 +65,11 @@ type circularBufferEntry struct {
 
 // If we assume the average case 95 bytes per exemplar we can fit 5651272 exemplars in
 // 1GB of extra memory, accounting for the fact that this is heap allocated space.
-func NewCircularExemplarStorage(len int, reg prometheus.Registerer, secondaries ...storage.ExemplarAppender) *CircularExemplarStorage {
+func NewCircularExemplarStorage(len int, reg prometheus.Registerer) *CircularExemplarStorage {
 	return &CircularExemplarStorage{
-		exemplars:   make([]*circularBufferEntry, len),
-		index:       make(map[string]int),
-		secondaries: secondaries,
-		metrics:     newExemplarMetrics(reg),
+		exemplars: make([]*circularBufferEntry, len),
+		index:     make(map[string]int),
+		metrics:   newExemplarMetrics(reg),
 	}
 }
 
@@ -84,15 +82,12 @@ func (ce *CircularExemplarStorage) Querier(ctx context.Context) (storage.Exempla
 	return ce, nil
 }
 
-func (ce *CircularExemplarStorage) SetSecondaries(secondaries ...storage.ExemplarAppender) {
-	ce.secondaries = secondaries
-}
-
 // Select returns exemplars for a given set of series labels hash.
-func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]exemplar.Exemplar, error) {
+func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]exemplar.ExemplarScrapeTimestamp, error) {
+
 	var (
-		ret []exemplar.Exemplar
-		e   exemplar.Exemplar
+		ret []exemplar.ExemplarScrapeTimestamp
+		e   *circularBufferEntry
 		idx int
 		ok  bool
 		buf []byte
@@ -116,15 +111,15 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 			break
 		}
 
-		e = ce.exemplars[idx].exemplar
+		e = ce.exemplars[idx]
 		// todo (callum) This line is needed to avoid an infinite loop, consider redesign of buffer entry struct.
 		if ce.exemplars[idx].scrapeTimestamp > lastTs {
 			break
 		}
 
 		lastTs = ce.exemplars[idx].scrapeTimestamp
-		if e.Ts >= start && e.Ts <= end {
-			ret = append(ret, e)
+		if e.scrapeTimestamp >= start && e.scrapeTimestamp <= end {
+			ret = append(ret, exemplar.ExemplarScrapeTimestamp{Exemplar: e.exemplar, ScrapeTimestamp: e.scrapeTimestamp})
 		}
 		idx = ce.exemplars[idx].prev
 	}
@@ -146,18 +141,16 @@ func (ce *CircularExemplarStorage) indexGcCheck(cbe *circularBufferEntry) {
 		return
 	}
 
-	if ce.exemplars[ce.nextIndex] != nil {
-		l2 := ce.exemplars[i].seriesLabels
-		if !labels.Equal(l2, l) { // No more exemplars for series l.
-			delete(ce.index, cbe.seriesLabels.String())
-			return
-		}
-		// There's still at least one exemplar for the series l, so we can update the index.
-		ce.index[l.String()] = i
+	l2 := ce.exemplars[i].seriesLabels
+	if !labels.Equal(l2, l) { // No more exemplars for series l.
+		delete(ce.index, cbe.seriesLabels.String())
+		return
 	}
+	// There's still at least one exemplar for the series l, so we can update the index.
+	ce.index[l.String()] = i
 }
 
-func (ce *CircularExemplarStorage) addExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
+func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
 	seriesLabels := l.String()
 	ce.lock.Lock()
 	defer ce.lock.Unlock()
@@ -181,7 +174,7 @@ func (ce *CircularExemplarStorage) addExemplar(l labels.Labels, t int64, e exemp
 	}
 
 	// Check for duplicate vs last stored exemplar for this series.
-	if ce.exemplars[idx].exemplar.Equals(e) {
+	if ce.exemplars[idx].exemplar.EqualsWithoutTimestamp(e) {
 		ce.metrics.duplicateExemplars.Inc()
 		return storage.ErrDuplicateExemplar
 	}
@@ -203,26 +196,13 @@ func (ce *CircularExemplarStorage) addExemplar(l labels.Labels, t int64, e exemp
 	return nil
 }
 
-func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
-	if err := ce.addExemplar(l, t, e); err != nil {
-		return err
-	}
-
-	for _, s := range ce.secondaries {
-		if err := s.AddExemplar(l, t, e); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // For use in tests, clears the entire exemplar storage.
 func (ce *CircularExemplarStorage) Reset() {
 	ce.exemplars = make([]*circularBufferEntry, len(ce.exemplars))
 	ce.index = make(map[string]int)
 }
 
-func reverseExemplars(b []exemplar.Exemplar) {
+func reverseExemplars(b []exemplar.ExemplarScrapeTimestamp) {
 	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
 		b[i], b[j] = b[j], b[i]
 	}

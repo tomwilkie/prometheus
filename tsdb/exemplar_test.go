@@ -80,22 +80,11 @@ func TestAddDuplicateExemplar(t *testing.T) {
 		HasTs: true,
 		Ts:    101,
 	}
-	e2 := exemplar.Exemplar{
-		Labels: labels.Labels{
-			labels.Label{
-				Name:  "traceID",
-				Value: "qwerty",
-			},
-		},
-		Value: 0.1,
-		HasTs: true,
-		Ts:    102,
-	}
 
 	es.AddExemplar(l, 0, e)
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
-	err := es.AddExemplar(l, 0, e2)
+	err := es.AddExemplar(l, 1, e)
 	require.Error(t, err, "no error when attempting to add duplicate exemplar")
 	require.True(t, err == storage.ErrDuplicateExemplar, "duplicate exemplar was added")
 }

@@ -164,7 +164,7 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemp
 	}
 
 	// Check for duplicate vs last stored exemplar for this series.
-	if ce.exemplars[idx.last].exemplar.EqualsWithoutTimestamp(e) {
+	if ce.exemplars[idx.last].exemplar.Equals(e) {
 		ce.metrics.duplicateExemplars.Inc()
 		return storage.ErrDuplicateExemplar
 	}

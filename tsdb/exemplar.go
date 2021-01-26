@@ -51,16 +51,21 @@ func newExemplarMetrics(r prometheus.Registerer) *exemplarMetrics {
 type CircularExemplarStorage struct {
 	metrics   *exemplarMetrics
 	lock      sync.RWMutex
-	index     map[string]int
+	index     map[string]indexEntry
 	exemplars []*circularBufferEntry
 	nextIndex int
+}
+
+type indexEntry struct {
+	first int
+	last  int
 }
 
 type circularBufferEntry struct {
 	exemplar        exemplar.Exemplar
 	seriesLabels    labels.Labels
 	scrapeTimestamp int64
-	prev            int // index of previous exemplar in circular for the same series, use -1 as a default for new entries
+	next            int
 }
 
 // If we assume the average case 95 bytes per exemplar we can fit 5651272 exemplars in
@@ -68,7 +73,7 @@ type circularBufferEntry struct {
 func NewCircularExemplarStorage(len int, reg prometheus.Registerer) *CircularExemplarStorage {
 	return &CircularExemplarStorage{
 		exemplars: make([]*circularBufferEntry, len),
-		index:     make(map[string]int),
+		index:     make(map[string]indexEntry),
 		metrics:   newExemplarMetrics(reg),
 	}
 }
@@ -88,9 +93,8 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 	var (
 		ret []exemplar.ExemplarScrapeTimestamp
 		e   *circularBufferEntry
-		idx int
+		idx indexEntry
 		ok  bool
-		buf []byte
 	)
 
 	ce.lock.RLock()
@@ -99,55 +103,41 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 	if idx, ok = ce.index[l.String()]; !ok {
 		return nil, nil
 	}
-	lastTs := ce.exemplars[idx].scrapeTimestamp
 
+	e = ce.exemplars[idx.first]
 	for {
-		// We need the labels check here in case what was the previous exemplar for the series
-		// when the exemplar from the last loop iteration was written has since been overwritten
-		// with an exemplar from another series.
-		// todo (callum) confirm if this check is still needed now that adding an exemplar should
-		// update the index and previous pointer for the series whose exemplar was overwritten.
-		if idx == -1 || string(ce.exemplars[idx].seriesLabels.Bytes(buf)) != string(l.Bytes(buf)) {
+		if e.scrapeTimestamp < start {
+			e = ce.exemplars[e.next]
+			continue
+		}
+		if e.scrapeTimestamp > end {
 			break
 		}
 
-		e = ce.exemplars[idx]
-		// todo (callum) This line is needed to avoid an infinite loop, consider redesign of buffer entry struct.
-		if ce.exemplars[idx].scrapeTimestamp > lastTs {
+		ret = append(ret, exemplar.ExemplarScrapeTimestamp{Exemplar: e.exemplar, ScrapeTimestamp: e.scrapeTimestamp})
+		if e.next == -1 {
 			break
 		}
-
-		lastTs = ce.exemplars[idx].scrapeTimestamp
-		if e.scrapeTimestamp >= start && e.scrapeTimestamp <= end {
-			ret = append(ret, exemplar.ExemplarScrapeTimestamp{Exemplar: e.exemplar, ScrapeTimestamp: e.scrapeTimestamp})
-		}
-		idx = ce.exemplars[idx].prev
+		e = ce.exemplars[e.next]
 	}
-	reverseExemplars(ret)
 	return ret, nil
 }
 
 // Takes the circularBufferEntry that will be overwritten and updates the
 // storages index for that entries labelset if necessary.
-func (ce *CircularExemplarStorage) indexGcCheck(cbe *circularBufferEntry) {
+func (ce *CircularExemplarStorage) indexGc(cbe *circularBufferEntry) {
 	if cbe == nil {
 		return
 	}
 
-	l := cbe.seriesLabels
-	i := cbe.prev
-	if cbe.prev == -1 {
-		delete(ce.index, l.String())
+	l := cbe.seriesLabels.String()
+	i := cbe.next
+	if i == -1 {
+		delete(ce.index, l)
 		return
 	}
 
-	l2 := ce.exemplars[i].seriesLabels
-	if !labels.Equal(l2, l) { // No more exemplars for series l.
-		delete(ce.index, cbe.seriesLabels.String())
-		return
-	}
-	// There's still at least one exemplar for the series l, so we can update the index.
-	ce.index[l.String()] = i
+	ce.index[l] = indexEntry{i, ce.index[l].last}
 }
 
 func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
@@ -157,15 +147,15 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemp
 	idx, ok := ce.index[seriesLabels]
 
 	if !ok {
-		ce.indexGcCheck(ce.exemplars[ce.nextIndex])
+		ce.indexGc(ce.exemplars[ce.nextIndex])
 		// Default the prev value to -1 (which we use to detect that we've iterated through all exemplars for a series in Select)
 		// since this is the first exemplar stored for this series.
 		ce.exemplars[ce.nextIndex] = &circularBufferEntry{
 			exemplar:        e,
 			seriesLabels:    l,
 			scrapeTimestamp: t,
-			prev:            -1}
-		ce.index[seriesLabels] = ce.nextIndex
+			next:            -1}
+		ce.index[seriesLabels] = indexEntry{ce.nextIndex, ce.nextIndex}
 		ce.nextIndex++
 		if ce.nextIndex >= cap(ce.exemplars) {
 			ce.nextIndex = 0
@@ -174,21 +164,29 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemp
 	}
 
 	// Check for duplicate vs last stored exemplar for this series.
-	if ce.exemplars[idx].exemplar.EqualsWithoutTimestamp(e) {
+	if ce.exemplars[idx.last].exemplar.EqualsWithoutTimestamp(e) {
 		ce.metrics.duplicateExemplars.Inc()
 		return storage.ErrDuplicateExemplar
 	}
-	if e.Ts <= ce.exemplars[idx].scrapeTimestamp || t <= ce.exemplars[idx].scrapeTimestamp {
+
+	// maybe don't compare these two timestamps, one is the event timestamp on the client side
+	// the other is the scrape timestamp from prometheus' perspective, different clocks
+	// we can't rely on the exemplars event timestamps being in chronological order
+	// if e.Ts <= ce.exemplars[idx].Ts || t <= ce.exemplars[idx].scrapeTimestamp {
+	if t <= ce.exemplars[idx.last].scrapeTimestamp {
 		ce.metrics.outOfOrderExemplars.Inc()
 		return storage.ErrOutOfOrderExemplar
 	}
-	ce.indexGcCheck(ce.exemplars[ce.nextIndex])
+	ce.indexGc(ce.exemplars[ce.nextIndex])
 	ce.exemplars[ce.nextIndex] = &circularBufferEntry{
 		exemplar:        e,
 		seriesLabels:    l,
 		scrapeTimestamp: t,
-		prev:            idx}
-	ce.index[seriesLabels] = ce.nextIndex
+		next:            -1,
+	}
+
+	ce.exemplars[ce.index[seriesLabels].last].next = ce.nextIndex
+	ce.index[seriesLabels] = indexEntry{ce.index[seriesLabels].first, ce.nextIndex}
 	ce.nextIndex++
 	if ce.nextIndex >= cap(ce.exemplars) {
 		ce.nextIndex = 0
@@ -199,7 +197,7 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemp
 // For use in tests, clears the entire exemplar storage.
 func (ce *CircularExemplarStorage) Reset() {
 	ce.exemplars = make([]*circularBufferEntry, len(ce.exemplars))
-	ce.index = make(map[string]int)
+	ce.index = make(map[string]indexEntry)
 }
 
 func reverseExemplars(b []exemplar.ExemplarScrapeTimestamp) {

@@ -537,7 +537,7 @@ func (api *API) queryExemplars(r *http.Request) apiFuncResult {
 	}
 
 	for _, s := range series {
-		eq, err := api.ExemplarQueryable.Querier(context.Background())
+		eq, err := api.ExemplarQueryable.Querier(r.Context())
 		if err != nil {
 			return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 		}

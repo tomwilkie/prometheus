@@ -26,6 +26,7 @@ type Exemplar struct {
 }
 
 // ExemplarScrapeTimestamp is an exemplar with it's scrape timestamp.
+//nolint: golint
 type ExemplarScrapeTimestamp struct {
 	Exemplar        Exemplar
 	ScrapeTimestamp int64

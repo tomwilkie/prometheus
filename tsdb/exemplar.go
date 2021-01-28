@@ -199,9 +199,3 @@ func (ce *CircularExemplarStorage) Reset() {
 	ce.exemplars = make([]*circularBufferEntry, len(ce.exemplars))
 	ce.index = make(map[string]indexEntry)
 }
-
-func reverseExemplars(b []exemplar.ExemplarScrapeTimestamp) {
-	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
-		b[i], b[j] = b[j], b[i]
-	}
-}

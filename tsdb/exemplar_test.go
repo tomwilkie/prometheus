@@ -236,7 +236,7 @@ func TestSelectExemplarOrdering(t *testing.T) {
 	}
 	exemplars := []exemplar.ExemplarScrapeTimestamp{
 		{
-			exemplar.Exemplar{
+			Exemplar: exemplar.Exemplar{
 				Labels: labels.Labels{
 					labels.Label{
 						Name:  "traceID",
@@ -246,10 +246,10 @@ func TestSelectExemplarOrdering(t *testing.T) {
 				Value: 0.1,
 				Ts:    101,
 			},
-			100,
+			ScrapeTimestamp: 100,
 		},
 		{
-			exemplar.Exemplar{
+			Exemplar: exemplar.Exemplar{
 				Labels: labels.Labels{
 					labels.Label{
 						Name:  "traceID",
@@ -259,10 +259,10 @@ func TestSelectExemplarOrdering(t *testing.T) {
 				Value: 0.2,
 				Ts:    102,
 			},
-			101,
+			ScrapeTimestamp: 101,
 		},
 		{
-			exemplar.Exemplar{
+			Exemplar: exemplar.Exemplar{
 				Labels: labels.Labels{
 					labels.Label{
 						Name:  "traceID",
@@ -272,10 +272,10 @@ func TestSelectExemplarOrdering(t *testing.T) {
 				Value: 0.3,
 				Ts:    103,
 			},
-			102,
+			ScrapeTimestamp: 102,
 		},
 		{
-			exemplar.Exemplar{
+			Exemplar: exemplar.Exemplar{
 				Labels: labels.Labels{
 					labels.Label{
 						Name:  "traceID",
@@ -285,10 +285,10 @@ func TestSelectExemplarOrdering(t *testing.T) {
 				Value: 0.4,
 				Ts:    104,
 			},
-			103,
+			ScrapeTimestamp: 103,
 		},
 		{
-			exemplar.Exemplar{
+			Exemplar: exemplar.Exemplar{
 				Labels: labels.Labels{
 					labels.Label{
 						Name:  "traceID",
@@ -298,7 +298,7 @@ func TestSelectExemplarOrdering(t *testing.T) {
 				Value: 0.5,
 				Ts:    105,
 			},
-			104,
+			ScrapeTimestamp: 104,
 		},
 		{
 			Exemplar: exemplar.Exemplar{

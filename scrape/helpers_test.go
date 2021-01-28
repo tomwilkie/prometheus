@@ -36,18 +36,6 @@ func (a nopAppender) AddExemplarFast(uint64, int64, float64, exemplar.Exemplar) 
 func (a nopAppender) Commit() error                                                   { return nil }
 func (a nopAppender) Rollback() error                                                 { return nil }
 
-type nopExemplarAppendable struct{}
-
-func (ea nopExemplarAppendable) Appender() storage.ExemplarAppender {
-	return nopExemplarAppender{}
-}
-
-type nopExemplarAppender struct{}
-
-func (ea nopExemplarAppender) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
-	return nil
-}
-
 type sample struct {
 	metric labels.Labels
 	t      int64

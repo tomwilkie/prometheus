@@ -1504,11 +1504,6 @@ func TestScrapeLoopAppendNoStalenessIfTimestamp(t *testing.T) {
 }
 
 func TestScrapeLoopAppendExemplar(t *testing.T) {
-	type sampleWithExemplar struct {
-		sample
-		e exemplar.Exemplar
-	}
-
 	tests := []struct {
 		title           string
 		scrapeLabels    string

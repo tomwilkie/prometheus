@@ -1483,12 +1483,12 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
 					[]exemplar.ExemplarScrapeTimestamp{
 						{
-							exemplar.Exemplar{
+							Exemplar: exemplar.Exemplar{
 								Labels: labels.FromStrings("id", "abc"),
 								Value:  10,
 								Ts:     timestamp.FromTime(start.Add(2 * time.Second)),
 							},
-							timestamp.FromTime(start.Add(2 * time.Second)),
+							ScrapeTimestamp: timestamp.FromTime(start.Add(2 * time.Second)),
 						},
 					},
 				},
@@ -1496,12 +1496,12 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					labels.FromStrings("__name__", "test_metric4", "foo", "asdf", "cluster", "abc"),
 					[]exemplar.ExemplarScrapeTimestamp{
 						{
-							exemplar.Exemplar{
+							Exemplar: exemplar.Exemplar{
 								Labels: labels.FromStrings("id", "lul"),
 								Value:  10,
 								Ts:     timestamp.FromTime(start.Add(4 * time.Second)),
 							},
-							timestamp.FromTime(start.Add(4 * time.Second)),
+							ScrapeTimestamp: timestamp.FromTime(start.Add(4 * time.Second)),
 						},
 					},
 				},
@@ -1511,12 +1511,12 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
 					[]exemplar.ExemplarScrapeTimestamp{
 						{
-							exemplar.Exemplar{
+							Exemplar: exemplar.Exemplar{
 								Labels: labels.FromStrings("id", "abc"),
 								Value:  10,
 								Ts:     timestamp.FromTime(start.Add(2 * time.Second)),
 							},
-							timestamp.FromTime(start.Add(2 * time.Second)),
+							ScrapeTimestamp: timestamp.FromTime(start.Add(2 * time.Second)),
 						},
 					},
 				},
@@ -1524,12 +1524,12 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					labels.FromStrings("__name__", "test_metric4", "foo", "asdf", "cluster", "abc"),
 					[]exemplar.ExemplarScrapeTimestamp{
 						{
-							exemplar.Exemplar{
+							Exemplar: exemplar.Exemplar{
 								Labels: labels.FromStrings("id", "lul"),
 								Value:  10,
 								Ts:     timestamp.FromTime(start.Add(4 * time.Second)),
 							},
-							timestamp.FromTime(start.Add(4 * time.Second)),
+							ScrapeTimestamp: timestamp.FromTime(start.Add(4 * time.Second)),
 						},
 					},
 				},
@@ -1547,12 +1547,12 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
 					[]exemplar.ExemplarScrapeTimestamp{
 						{
-							exemplar.Exemplar{
+							Exemplar: exemplar.Exemplar{
 								Labels: labels.FromStrings("id", "abc"),
 								Value:  10,
 								Ts:     53,
 							},
-							53,
+							ScrapeTimestamp: 53,
 						},
 					},
 				},
@@ -1560,12 +1560,12 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					labels.FromStrings("__name__", "test_metric4", "foo", "qwerty", "cluster", "abc"),
 					[]exemplar.ExemplarScrapeTimestamp{
 						{
-							exemplar.Exemplar{
+							Exemplar: exemplar.Exemplar{
 								Labels: labels.FromStrings("id", "lul"),
 								Value:  10,
 								Ts:     153,
 							},
-							153,
+							ScrapeTimestamp: 153,
 						},
 					},
 				},
@@ -1575,12 +1575,12 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
 					[]exemplar.ExemplarScrapeTimestamp{
 						{
-							exemplar.Exemplar{
+							Exemplar: exemplar.Exemplar{
 								Labels: labels.FromStrings("id", "abc"),
 								Value:  10,
 								Ts:     53,
 							},
-							53,
+							ScrapeTimestamp: 53,
 						},
 					},
 				},

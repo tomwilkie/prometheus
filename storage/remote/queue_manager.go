@@ -30,7 +30,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/config"
-
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/relabel"
 	"github.com/prometheus/prometheus/prompb"
@@ -467,7 +466,7 @@ outer:
 			default:
 			}
 
-			if t.shards.enqueue(s.Ref, rwSample{
+			if t.shards.enqueue(s.Ref, sample{
 				labels: lbls,
 				t:      s.T,
 				v:      s.V,
@@ -785,7 +784,7 @@ func (t *QueueManager) newShards() *shards {
 	return s
 }
 
-type rwSample struct {
+type sample struct {
 	labels labels.Labels
 	t      int64
 	v      float64
@@ -795,7 +794,7 @@ type shards struct {
 	mtx sync.RWMutex // With the WAL, this is never actually contended.
 
 	qm     *QueueManager
-	queues []chan interface{}
+	queues []chan sample
 
 	// Emulate a wait group with a channel and an atomic int, as you
 	// cannot select on a wait group.
@@ -819,9 +818,9 @@ func (s *shards) start(n int) {
 	s.qm.metrics.pendingSamples.Set(0)
 	s.qm.metrics.numShards.Set(float64(n))
 
-	newQueues := make([]chan interface{}, n)
+	newQueues := make([]chan sample, n)
 	for i := 0; i < n; i++ {
-		newQueues[i] = make(chan interface{}, s.qm.cfg.Capacity)
+		newQueues[i] = make(chan sample, s.qm.cfg.Capacity)
 	}
 
 	s.queues = newQueues
@@ -871,7 +870,7 @@ func (s *shards) stop() {
 
 // enqueue a sample.  If we are currently in the process of shutting down or resharding,
 // will return false; in this case, you should back off and retry.
-func (s *shards) enqueue(ref uint64, sample interface{}) bool {
+func (s *shards) enqueue(ref uint64, sample sample) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
@@ -891,7 +890,7 @@ func (s *shards) enqueue(ref uint64, sample interface{}) bool {
 	}
 }
 
-func (s *shards) runShard(ctx context.Context, shardID int, queue chan interface{}) {
+func (s *shards) runShard(ctx context.Context, shardID int, queue chan sample) {
 	defer func() {
 		if s.running.Dec() == 0 {
 			close(s.done)
@@ -946,20 +945,18 @@ func (s *shards) runShard(ctx context.Context, shardID int, queue chan interface
 			// Number of pending samples is limited by the fact that sendSamples (via sendSamplesWithBackoff)
 			// retries endlessly, so once we reach max samples, if we can never send to the endpoint we'll
 			// stop reading from the queue. This makes it safe to reference pendingSamples by index.
-			switch sample := sample.(type) {
-			case rwSample:
-				pendingSamples[nPending].Labels = labelsToLabelsProto(sample.labels, pendingSamples[nPending].Labels)
-				pendingSamples[nPending].Samples[0].Timestamp = sample.t
-				pendingSamples[nPending].Samples[0].Value = sample.v
-				nPending++
-				if nPending >= max {
-					s.sendSamples(ctx, pendingSamples, &buf)
-					nPending = 0
-					s.qm.metrics.pendingSamples.Sub(float64(max))
+			pendingSamples[nPending].Labels = labelsToLabelsProto(sample.labels, pendingSamples[nPending].Labels)
+			pendingSamples[nPending].Samples[0].Timestamp = sample.t
+			pendingSamples[nPending].Samples[0].Value = sample.v
+			nPending++
 
-					stop()
-					timer.Reset(time.Duration(s.qm.cfg.BatchSendDeadline))
-				}
+			if nPending >= max {
+				s.sendSamples(ctx, pendingSamples, &buf)
+				nPending = 0
+				s.qm.metrics.pendingSamples.Sub(float64(max))
+
+				stop()
+				timer.Reset(time.Duration(s.qm.cfg.BatchSendDeadline))
 			}
 
 		case <-timer.C:

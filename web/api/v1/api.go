@@ -526,7 +526,7 @@ func (api *API) queryExemplars(r *http.Request) apiFuncResult {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
 	if len(selectors) < 1 {
-		return apiFuncResult{nil, &apiError{errorBadData, fmt.Errorf("no series found for supplied query: %s", expr)}, nil, nil}
+		return apiFuncResult{nil, nil, nil, nil}
 	}
 
 	var retExemplars []exemplarData
@@ -551,6 +551,9 @@ func (api *API) queryExemplars(r *http.Request) apiFuncResult {
 				continue
 			}
 			retExemplars = append(retExemplars, exemplarData{SeriesLabels: s.At().Labels(), Exemplars: res})
+		}
+		if err := s.Err(); err != nil {
+			return apiFuncResult{nil, &apiError{errorExec, err}, nil, nil}
 		}
 	}
 

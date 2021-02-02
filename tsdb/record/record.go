@@ -37,6 +37,8 @@ const (
 	Samples Type = 2
 	// Tombstones is used to match WAL records of type Tombstones.
 	Tombstones Type = 3
+	// Exemplars is used to match WAL records of type Exemplars.
+	Exemplars Type = 5
 )
 
 var (
@@ -55,6 +57,16 @@ type RefSample struct {
 	Ref uint64
 	T   int64
 	V   float64
+}
+
+// RefExemplar is an exemplar with it's labels, timestamp, value the exemplar was collected/observed with,
+// scrape timestamp, and a reference to a series.
+type RefExemplar struct {
+	Ref             uint64
+	T               int64
+	V               float64
+	ScrapeTimestamp int64
+	Labels          labels.Labels
 }
 
 // Decoder decodes series, sample, and tombstone records.
@@ -105,6 +117,48 @@ func (d *Decoder) Series(rec []byte, series []RefSeries) ([]RefSeries, error) {
 		return nil, errors.Errorf("unexpected %d bytes left in entry", len(dec.B))
 	}
 	return series, nil
+}
+
+func (d *Decoder) Exemplars(rec []byte, exemplars []RefExemplar) ([]RefExemplar, error) {
+	dec := encoding.Decbuf{B: rec}
+	t := Type(dec.Byte())
+	if t != Exemplars {
+		return nil, errors.New("invalid record type")
+	}
+	if dec.Len() == 0 {
+		return exemplars, nil
+	}
+	var (
+		baseRef  = dec.Be64()
+		baseTime = dec.Be64int64()
+	)
+	for len(dec.B) > 0 && dec.Err() == nil {
+		dref := dec.Varint64()
+		dtime := dec.Varint64()
+		val := dec.Be64()
+
+		lset := make(labels.Labels, dec.Uvarint())
+		for i := range lset {
+			lset[i].Name = dec.UvarintStr()
+			lset[i].Value = dec.UvarintStr()
+		}
+		sort.Sort(lset)
+
+		exemplars = append(exemplars, RefExemplar{
+			Ref:    uint64(int64(baseRef) + dref),
+			T:      baseTime + dtime,
+			V:      math.Float64frombits(val),
+			Labels: lset,
+		})
+	}
+
+	if dec.Err() != nil {
+		return nil, errors.Wrapf(dec.Err(), "decode error after %d exemplars", len(exemplars))
+	}
+	if len(dec.B) > 0 {
+		return nil, errors.Errorf("unexpected %d bytes left in entry", len(dec.B))
+	}
+	return exemplars, nil
 }
 
 // Samples appends samples in rec to the given slice.
@@ -185,6 +239,36 @@ func (e *Encoder) Series(series []RefSeries, b []byte) []byte {
 			buf.PutUvarintStr(l.Value)
 		}
 	}
+	return buf.Get()
+}
+
+func (e *Encoder) Exemplars(exemplars []RefExemplar, b []byte) []byte {
+	buf := encoding.Encbuf{B: b}
+	buf.PutByte(byte(Exemplars))
+
+	if len(exemplars) == 0 {
+		return buf.Get()
+	}
+
+	// Store base timestamp and base reference number of first sample.
+	// All samples encode their timestamp and ref as delta to those.
+	first := exemplars[0]
+
+	buf.PutBE64(first.Ref)
+	buf.PutBE64int64(first.T)
+
+	for _, ex := range exemplars {
+		buf.PutVarint64(int64(ex.Ref) - int64(first.Ref))
+		buf.PutVarint64(ex.T - first.T)
+		buf.PutBE64(math.Float64bits(ex.V))
+
+		buf.PutUvarint(len(ex.Labels))
+		for _, l := range ex.Labels {
+			buf.PutUvarintStr(l.Name)
+			buf.PutUvarintStr(l.Value)
+		}
+	}
+
 	return buf.Get()
 }
 

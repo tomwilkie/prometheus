@@ -126,7 +126,7 @@ type LabelQuerier interface {
 
 type ExemplarQueryable interface {
 	// Querier returns a new ExemplarQuerier on the storage.
-	Querier(ctx context.Context) (ExemplarQuerier, error)
+	ExemplarQuerier(ctx context.Context) (ExemplarQuerier, error)
 }
 
 // Querier provides reading access to time series data.

@@ -181,7 +181,7 @@ type Handler struct {
 	context         context.Context
 	storage         storage.Storage
 	localStorage    LocalStorage
-	exemplarStorage storage.ExemplarStorage
+	exemplarStorage storage.ExemplarQueryable
 	notifier        *notifier.Manager
 
 	apiV1 *api_v1.API
@@ -221,7 +221,7 @@ type Options struct {
 	TSDBMaxBytes          units.Base2Bytes
 	LocalStorage          LocalStorage
 	Storage               storage.Storage
-	ExemplarStorage       storage.ExemplarStorage
+	ExemplarStorage       storage.ExemplarQueryable
 	QueryEngine           *promql.Engine
 	LookbackDelta         time.Duration
 	ScrapeManager         *scrape.Manager

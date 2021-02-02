@@ -533,11 +533,11 @@ func (api *API) queryExemplars(r *http.Request) apiFuncResult {
 	var series []storage.SeriesSet
 
 	for _, selectorArr := range selectors {
-		series = append(series, q.Select(false, &storage.SelectHints{Func: "series"}, selectorArr...))
+		series = append(series, q.Select(false, nil, selectorArr...))
 	}
 
 	for _, s := range series {
-		eq, err := api.ExemplarQueryable.Querier(r.Context())
+		eq, err := api.ExemplarQueryable.ExemplarQuerier(r.Context())
 		if err != nil {
 			return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 		}

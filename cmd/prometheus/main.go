@@ -113,7 +113,6 @@ type flagConfig struct {
 	queryTimeout        model.Duration
 	queryConcurrency    int
 	queryMaxSamples     int
-	ExemplarsLimit      int
 	RemoteFlushDeadline model.Duration
 
 	featureList []string
@@ -266,7 +265,7 @@ func main() {
 		Default("1048576").IntVar(&cfg.web.RemoteReadBytesInFrame)
 
 	a.Flag("storage.exemplars.exemplars-limit", "Maximum number of exemplars to store in in-memory exemplar storage total.").
-		Default("100000").IntVar(&cfg.ExemplarsLimit)
+		Default("100000").IntVar(&cfg.tsdb.MaxExemplars)
 
 	a.Flag("rules.alert.for-outage-tolerance", "Max time to tolerate prometheus outage for restoring \"for\" state of alert.").
 		Default("1h").SetValue(&cfg.outageTolerance)
@@ -473,6 +472,8 @@ func main() {
 	cfg.web.TSDBDir = cfg.localStoragePath
 	cfg.web.LocalStorage = localStorage
 	cfg.web.Storage = fanoutStorage
+	// todo: clean up exemplar interfaces and connection of exemplar storage to web api
+	cfg.web.ExemplarStorage = localStorage
 	cfg.web.QueryEngine = queryEngine
 	cfg.web.ScrapeManager = scrapeManager
 	cfg.web.RuleManager = ruleManager
@@ -1097,6 +1098,13 @@ func (s *readyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Q
 func (s *readyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
 	if x := s.get(); x != nil {
 		return x.ChunkQuerier(ctx, mint, maxt)
+	}
+	return nil, tsdb.ErrNotReady
+}
+
+func (s *readyStorage) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error) {
+	if x := s.get(); x != nil {
+		return x.ExemplarQuerier(ctx)
 	}
 	return nil, tsdb.ErrNotReady
 }

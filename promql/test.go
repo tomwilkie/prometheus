@@ -68,9 +68,8 @@ type Test struct {
 // NewTest returns an initialized empty Test.
 func NewTest(t testutil.T, input string) (*Test, error) {
 	test := &Test{
-		T:               t,
-		cmds:            []testCommand{},
-		exemplarStorage: tsdb.NewCircularExemplarStorage(10, nil),
+		T:    t,
+		cmds: []testCommand{},
 	}
 	err := test.parse(input)
 	test.clear()

@@ -47,6 +47,9 @@ var (
 	// ErrInvalidSample is returned if an appended sample is not valid and can't
 	// be ingested.
 	ErrInvalidSample = errors.New("invalid sample")
+	// ErrInvalidExemplar is returned if an appended sample is not valid and can't
+	// be ingested.
+	ErrInvalidExemplar = errors.New("invalid exemplar")
 	// ErrAppenderClosed is returned if an appender has already be successfully
 	// rolled back or committed.
 	ErrAppenderClosed = errors.New("appender closed")
@@ -369,6 +372,10 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars i
 }
 
 func mmappedChunksDir(dir string) string { return filepath.Join(dir, "chunks_head") }
+
+func (h *Head) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error) {
+	return h.exemplars, nil
+}
 
 // processWALSamples adds a partition of samples it receives to the head and passes
 // them on to other workers.
@@ -1115,6 +1122,7 @@ func (h *Head) appender() *headAppender {
 		maxt:                  math.MinInt64,
 		samples:               h.getAppendBuffer(),
 		sampleSeries:          h.getSeriesBuffer(),
+		exemplars:             h.getExemplarBuffer(),
 		appendID:              appendID,
 		cleanupAppendIDsBelow: cleanupAppendIDsBelow,
 	}
@@ -1144,6 +1152,19 @@ func (h *Head) getAppendBuffer() []record.RefSample {
 func (h *Head) putAppendBuffer(b []record.RefSample) {
 	//nolint:staticcheck // Ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
 	h.appendPool.Put(b[:0])
+}
+
+func (h *Head) getExemplarBuffer() []record.RefExemplar {
+	b := h.exemplarsPool.Get()
+	if b == nil {
+		return make([]record.RefExemplar, 0, 512)
+	}
+	return b.([]record.RefExemplar)
+}
+
+func (h *Head) putExemplarBuffer(b []record.RefExemplar) {
+	//lint:ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
+	h.exemplarsPool.Put(b[:0])
 }
 
 func (h *Head) getSeriesBuffer() []*memSeries {
@@ -1179,6 +1200,7 @@ type headAppender struct {
 
 	series       []record.RefSeries
 	samples      []record.RefSample
+	exemplars    []record.RefExemplar
 	sampleSeries []*memSeries
 
 	appendID, cleanupAppendIDsBelow uint64
@@ -1254,10 +1276,75 @@ func (a *headAppender) AddFast(ref uint64, t int64, v float64) error {
 }
 
 func (a *headAppender) AddExemplar(lset labels.Labels, t int64, e exemplar.Exemplar) error {
-	return nil
+	// this should be t && e.Ts < a.minValidTime?
+	if t < a.minValidTime {
+		// exemplar out of bounds?
+		return storage.ErrOutOfBounds
+	}
+
+	// Ensure no empty labels have gotten through.
+	lset = lset.WithoutEmpty()
+
+	if len(lset) == 0 {
+		// errinvalidexemplar?
+		// return 0, errors.Wrap(ErrInvalidSample, "empty labelset")
+	}
+
+	if _, dup := lset.HasDuplicateLabelNames(); dup {
+		// errinvalidexemplar?
+		// return 0, errors.Wrap(ErrInvalidSample, fmt.Sprintf(`label name "%s" is not unique`, l))
+	}
+
+	s, created, err := a.head.getOrCreate(lset.Hash(), lset)
+	if err != nil {
+		return err
+	}
+
+	// in theory the series should never be created as a result of an AddExemplar call, I think
+	if created {
+		a.series = append(a.series, record.RefSeries{
+			Ref:    s.ref,
+			Labels: lset,
+		})
+	}
+	return a.AddExemplarFast(s.ref, t, e.Value, e)
 }
 
 func (a *headAppender) AddExemplarFast(ref uint64, t int64, v float64, e exemplar.Exemplar) error {
+	if t < a.minValidTime {
+		// todo metric for exemplar out of bounds? or use sample out of bounds?
+		return storage.ErrOutOfBounds
+	}
+
+	s := a.head.series.getByID(ref)
+	if s == nil {
+		return errors.Wrap(storage.ErrNotFound, "unknown series")
+	}
+	s.Lock()
+	if err := s.appendable(t, v); err != nil {
+		s.Unlock()
+		if err == storage.ErrOutOfOrderSample {
+			a.head.metrics.outOfOrderSamples.Inc()
+		}
+		return err
+	}
+	s.pendingCommit = true
+	s.Unlock()
+
+	if t < a.mint {
+		a.mint = t
+	}
+	if t > a.maxt {
+		a.maxt = t
+	}
+
+	a.exemplars = append(a.exemplars, record.RefExemplar{
+		Ref:             ref,
+		T:               e.Ts,
+		V:               e.Value,
+		Labels:          e.Labels,
+		ScrapeTimestamp: t,
+	})
 	return nil
 }
 
@@ -1278,6 +1365,13 @@ func (a *headAppender) log() error {
 
 		if err := a.head.wal.Log(rec); err != nil {
 			return errors.Wrap(err, "log series")
+		}
+	}
+	if len(a.exemplars) > 0 {
+		rec = enc.Exemplars(a.exemplars, buf)
+		buf = rec[:0]
+		if err := a.head.wal.Log(rec); err != nil {
+			return errors.Wrap(err, "log exemplars")
 		}
 	}
 	if len(a.samples) > 0 {
@@ -1302,9 +1396,22 @@ func (a *headAppender) Commit() (err error) {
 		return errors.Wrap(err, "write to WAL")
 	}
 
+	// no errors logging to WAL, so pass the exemplars along to the
+	// in memory storage
+	for _, e := range a.exemplars {
+		s := a.head.series.getByID(e.Ref)
+		a.head.exemplars.AddExemplar(s.lset, e.ScrapeTimestamp, exemplar.Exemplar{
+			Labels: e.Labels,
+			Value:  e.V,
+			Ts:     e.T,
+			// hasts field?
+		})
+	}
+
 	defer a.head.metrics.activeAppenders.Dec()
 	defer a.head.putAppendBuffer(a.samples)
 	defer a.head.putSeriesBuffer(a.sampleSeries)
+	defer a.head.putExemplarBuffer(a.exemplars)
 	defer a.head.iso.closeAppend(a.appendID)
 
 	total := len(a.samples)

@@ -156,10 +156,7 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemp
 			scrapeTimestamp: t,
 			next:            -1}
 		ce.index[seriesLabels] = indexEntry{ce.nextIndex, ce.nextIndex}
-		ce.nextIndex++
-		if ce.nextIndex >= cap(ce.exemplars) {
-			ce.nextIndex = 0
-		}
+		ce.nextIndex = (ce.nextIndex + 1) % len(ce.exemplars)
 		return nil
 	}
 
@@ -187,10 +184,7 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemp
 
 	ce.exemplars[ce.index[seriesLabels].last].next = ce.nextIndex
 	ce.index[seriesLabels] = indexEntry{ce.index[seriesLabels].first, ce.nextIndex}
-	ce.nextIndex++
-	if ce.nextIndex >= cap(ce.exemplars) {
-		ce.nextIndex = 0
-	}
+	ce.nextIndex = (ce.nextIndex + 1) % len(ce.exemplars)
 	return nil
 }
 

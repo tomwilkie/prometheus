@@ -35,6 +35,7 @@ func New(t testutil.T) *TestStorage {
 	opts := tsdb.DefaultOptions()
 	opts.MinBlockDuration = int64(24 * time.Hour / time.Millisecond)
 	opts.MaxBlockDuration = int64(24 * time.Hour / time.Millisecond)
+	opts.MaxExemplars = 10
 	db, err := tsdb.Open(dir, nil, nil, opts)
 	if err != nil {
 		t.Fatalf("Opening test storage failed: %s", err)

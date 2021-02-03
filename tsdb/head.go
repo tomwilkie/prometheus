@@ -377,6 +377,10 @@ func (h *Head) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, er
 	return h.exemplars, nil
 }
 
+func (h *Head) ExemplarStorage() storage.ExemplarStorage {
+	return h.exemplars
+}
+
 // processWALSamples adds a partition of samples it receives to the head and passes
 // them on to other workers.
 // Samples before the mint timestamp are discarded.
@@ -1075,11 +1079,11 @@ func (a *initAppender) AddFast(ref uint64, t int64, v float64) error {
 	return a.app.AddFast(ref, t, v)
 }
 
-func (a *initAppender) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
+func (a *initAppender) AddExemplar(l labels.Labels, e exemplar.Exemplar) error {
 	return nil
 }
 
-func (a *initAppender) AddExemplarFast(ref uint64, t int64, v float64, e exemplar.Exemplar) error {
+func (a *initAppender) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
 	return nil
 }
 
@@ -1275,9 +1279,9 @@ func (a *headAppender) AddFast(ref uint64, t int64, v float64) error {
 	return nil
 }
 
-func (a *headAppender) AddExemplar(lset labels.Labels, t int64, e exemplar.Exemplar) error {
+func (a *headAppender) AddExemplar(lset labels.Labels, e exemplar.Exemplar) error {
 	// this should be t && e.Ts < a.minValidTime?
-	if t < a.minValidTime {
+	if e.Ts < a.minValidTime {
 		// exemplar out of bounds?
 		return storage.ErrOutOfBounds
 	}
@@ -1286,13 +1290,11 @@ func (a *headAppender) AddExemplar(lset labels.Labels, t int64, e exemplar.Exemp
 	lset = lset.WithoutEmpty()
 
 	if len(lset) == 0 {
-		// errinvalidexemplar?
-		// return 0, errors.Wrap(ErrInvalidSample, "empty labelset")
+		return errors.Wrap(ErrInvalidExemplar, "empty labelset")
 	}
 
-	if _, dup := lset.HasDuplicateLabelNames(); dup {
-		// errinvalidexemplar?
-		// return 0, errors.Wrap(ErrInvalidSample, fmt.Sprintf(`label name "%s" is not unique`, l))
+	if l, dup := lset.HasDuplicateLabelNames(); dup {
+		return errors.Wrap(ErrInvalidExemplar, fmt.Sprintf(`label name "%s" is not unique`, l))
 	}
 
 	s, created, err := a.head.getOrCreate(lset.Hash(), lset)
@@ -1307,11 +1309,11 @@ func (a *headAppender) AddExemplar(lset labels.Labels, t int64, e exemplar.Exemp
 			Labels: lset,
 		})
 	}
-	return a.AddExemplarFast(s.ref, t, e.Value, e)
+	return a.AddExemplarFast(s.ref, e)
 }
 
-func (a *headAppender) AddExemplarFast(ref uint64, t int64, v float64, e exemplar.Exemplar) error {
-	if t < a.minValidTime {
+func (a *headAppender) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
+	if e.Ts < a.minValidTime {
 		// todo metric for exemplar out of bounds? or use sample out of bounds?
 		return storage.ErrOutOfBounds
 	}
@@ -1320,30 +1322,31 @@ func (a *headAppender) AddExemplarFast(ref uint64, t int64, v float64, e exempla
 	if s == nil {
 		return errors.Wrap(storage.ErrNotFound, "unknown series")
 	}
-	s.Lock()
-	if err := s.appendable(t, v); err != nil {
-		s.Unlock()
-		if err == storage.ErrOutOfOrderSample {
-			a.head.metrics.outOfOrderSamples.Inc()
-		}
-		return err
-	}
-	s.pendingCommit = true
-	s.Unlock()
 
-	if t < a.mint {
-		a.mint = t
-	}
-	if t > a.maxt {
-		a.maxt = t
-	}
+	// todo: fix timestamp checks
+	// s.Lock()
+	// if err := s.appendable(e.Ts, e.V); err != nil {
+	// 	s.Unlock()
+	// 	if err == storage.ErrOutOfOrderSample {
+	// 		a.head.metrics.outOfOrderSamples.Inc()
+	// 	}
+	// 	return err
+	// }
+	// s.pendingCommit = true
+	// s.Unlock()
+
+	// if t < a.mint {
+	// 	a.mint = t
+	// }
+	// if t > a.maxt {
+	// 	a.maxt = t
+	// }
 
 	a.exemplars = append(a.exemplars, record.RefExemplar{
-		Ref:             ref,
-		T:               e.Ts,
-		V:               e.Value,
-		Labels:          e.Labels,
-		ScrapeTimestamp: t,
+		Ref:    ref,
+		T:      e.Ts,
+		V:      e.Value,
+		Labels: e.Labels,
 	})
 	return nil
 }
@@ -1400,7 +1403,8 @@ func (a *headAppender) Commit() (err error) {
 	// in memory storage
 	for _, e := range a.exemplars {
 		s := a.head.series.getByID(e.Ref)
-		a.head.exemplars.AddExemplar(s.lset, e.ScrapeTimestamp, exemplar.Exemplar{
+		// todo: check error
+		a.head.exemplars.AddExemplar(s.lset, exemplar.Exemplar{
 			Labels: e.Labels,
 			Value:  e.V,
 			Ts:     e.T,

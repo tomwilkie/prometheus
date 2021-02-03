@@ -112,7 +112,7 @@ func (t *Test) TSDB() *tsdb.DB {
 
 // ExemplarStorage returns the test's exemplar storage.
 func (t *Test) ExemplarStorage() storage.ExemplarStorage {
-	return t.exemplarStorage
+	return t.storage.DB.Head().ExemplarStorage()
 }
 
 func raise(line int, format string, v ...interface{}) error {

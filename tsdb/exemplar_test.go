@@ -41,7 +41,7 @@ func TestAddExemplar(t *testing.T) {
 		Ts:    1,
 	}
 
-	err := es.AddExemplar(l, 0, e)
+	err := es.AddExemplar(l, e)
 	require.NoError(t, err)
 	require.Equal(t, es.index[l.String()].last, 0, "exemplar was not stored correctly")
 
@@ -56,11 +56,11 @@ func TestAddExemplar(t *testing.T) {
 		Ts:    2,
 	}
 
-	err = es.AddExemplar(l, 3, e2)
+	err = es.AddExemplar(l, e2)
 	require.NoError(t, err)
 	require.Equal(t, es.index[l.String()].last, 1, "exemplar was not stored correctly, location of newest exemplar for series in index did not update")
 	require.True(t, es.exemplars[es.index[l.String()].last].exemplar.Equals(e2), "exemplar was not stored correctly, expected %+v got: %+v", e2, es.exemplars[es.index[l.String()].last].exemplar)
-	require.True(t, es.exemplars[es.index[l.String()].last].scrapeTimestamp == 3, "exemplar was not stored correctly, scrape timestamp was not correct")
+	require.True(t, es.exemplars[es.index[l.String()].last].exemplar.Ts == 3, "exemplar was not stored correctly, scrape timestamp was not correct")
 }
 
 func TestAddDuplicateExemplar(t *testing.T) {
@@ -81,10 +81,10 @@ func TestAddDuplicateExemplar(t *testing.T) {
 		Ts:    101,
 	}
 
-	es.AddExemplar(l, 0, e)
+	es.AddExemplar(l, e)
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
-	err := es.AddExemplar(l, 1, e)
+	err := es.AddExemplar(l, e)
 	require.Error(t, err, "no error when attempting to add duplicate exemplar")
 	require.True(t, err == storage.ErrDuplicateExemplar, "duplicate exemplar was added")
 }
@@ -118,10 +118,10 @@ func TestAddOutOfOrderExemplar(t *testing.T) {
 		Ts:    101,
 	}
 
-	es.AddExemplar(l, 0, e)
+	es.AddExemplar(l, e)
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
-	err := es.AddExemplar(l, 0, e2)
+	err := es.AddExemplar(l, e2)
 	require.Error(t, err, "no error when attempting to add out of order exemplar")
 	require.True(t, err == storage.ErrOutOfOrderExemplar, "out of order exemplar was added")
 }
@@ -196,7 +196,7 @@ func TestAddExtraExemplar(t *testing.T) {
 	}
 
 	for _, e := range exemplars {
-		es.AddExemplar(l, e.Ts-1, e)
+		es.AddExemplar(l, e)
 	}
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, exemplars[5]), "exemplar was not stored correctly")
 }
@@ -218,7 +218,7 @@ func TestSelectExemplar(t *testing.T) {
 		HasTs: false,
 	}
 
-	es.AddExemplar(l, 1, e)
+	es.AddExemplar(l, e)
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
 	exemplars, err := es.Select(0, 100, l)
@@ -316,7 +316,7 @@ func TestSelectExemplarOrdering(t *testing.T) {
 	}
 
 	for _, e := range exemplars {
-		es.AddExemplar(l, e.ScrapeTimestamp, e.Exemplar)
+		es.AddExemplar(l, e.Exemplar)
 	}
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, exemplars[5].Exemplar), "exemplar was not stored correctly")
 
@@ -375,7 +375,7 @@ func TestSelectExemplar_Circ(t *testing.T) {
 	}
 
 	for i, e := range exemplars {
-		err := es.AddExemplar(l, e.ScrapeTimestamp, e.Exemplar)
+		err := es.AddExemplar(l, e.Exemplar)
 		require.NoError(t, err)
 		require.Equal(t, es.index[l.String()].last, i, "exemplar was not stored correctly")
 	}
@@ -385,7 +385,7 @@ func TestSelectExemplar_Circ(t *testing.T) {
 	require.True(t, len(el) == 3, "didn't get expected one exemplar")
 
 	for i := range exemplars {
-		require.True(t, el[i].Exemplar.Equals(exemplars[i].Exemplar), "")
+		require.True(t, el[i].Equals(exemplars[i].Exemplar), "")
 	}
 }
 
@@ -406,56 +406,56 @@ func TestSelectExemplar_OverwriteLoop(t *testing.T) {
 
 	es.index[l1.String()] = indexEntry{6, 0}
 	es.exemplars[0] = &circularBufferEntry{
-		seriesLabels:    l1,
-		scrapeTimestamp: 4,
-		next:            -1,
+		seriesLabels: l1,
+		// scrapeTimestamp: 4,
+		next: -1,
 	}
 	es.exemplars[6] = &circularBufferEntry{
-		seriesLabels:    l1,
-		scrapeTimestamp: 3,
-		next:            0,
+		seriesLabels: l1,
+		// scrapeTimestamp: 3,
+		next: 0,
 	}
 
 	es.index[l2.String()] = indexEntry{3, 2}
 	es.exemplars[3] = &circularBufferEntry{
-		seriesLabels:    l2,
-		scrapeTimestamp: 3,
-		next:            4,
+		seriesLabels: l2,
+		// scrapeTimestamp: 3,
+		next: 4,
 	}
 	es.exemplars[4] = &circularBufferEntry{
-		seriesLabels:    l2,
-		scrapeTimestamp: 4,
-		next:            5,
+		seriesLabels: l2,
+		// scrapeTimestamp: 4,
+		next: 5,
 	}
 	es.exemplars[5] = &circularBufferEntry{
-		seriesLabels:    l2,
-		scrapeTimestamp: 5,
-		next:            7,
+		seriesLabels: l2,
+		// scrapeTimestamp: 5,
+		next: 7,
 	}
 	es.exemplars[7] = &circularBufferEntry{
-		seriesLabels:    l2,
-		scrapeTimestamp: 6,
-		next:            8,
+		seriesLabels: l2,
+		// scrapeTimestamp: 6,
+		next: 8,
 	}
 	es.exemplars[8] = &circularBufferEntry{
-		seriesLabels:    l2,
-		scrapeTimestamp: 7,
-		next:            9,
+		seriesLabels: l2,
+		// scrapeTimestamp: 7,
+		next: 9,
 	}
 	es.exemplars[9] = &circularBufferEntry{
-		seriesLabels:    l2,
-		scrapeTimestamp: 8,
-		next:            1,
+		seriesLabels: l2,
+		// scrapeTimestamp: 8,
+		next: 1,
 	}
 	es.exemplars[1] = &circularBufferEntry{
-		seriesLabels:    l2,
-		scrapeTimestamp: 9,
-		next:            2,
+		seriesLabels: l2,
+		// scrapeTimestamp: 9,
+		next: 2,
 	}
 	es.exemplars[2] = &circularBufferEntry{
-		seriesLabels:    l2,
-		scrapeTimestamp: 10,
-		next:            -1,
+		seriesLabels: l2,
+		// scrapeTimestamp: 10,
+		next: -1,
 	}
 
 	el, err := es.Select(0, 100, l2)
@@ -526,7 +526,7 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 	}
 
 	for i, e := range exemplars {
-		err := es.AddExemplar(l, e.ScrapeTimestamp, e.Exemplar)
+		err := es.AddExemplar(l, e.Exemplar)
 		require.NoError(t, err)
 		require.Equal(t, es.index[l.String()].last, i, "exemplar was not stored correctly")
 	}
@@ -537,7 +537,7 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 
 	// todo: smelly
 	for i := range el {
-		require.True(t, el[i].Exemplar.Equals(exemplars[i+2].Exemplar), "")
+		require.True(t, el[i].Equals(exemplars[i+2].Exemplar), "")
 	}
 }
 
@@ -552,18 +552,18 @@ func TestIndexOverwrite(t *testing.T) {
 		{Name: "service", Value: "qwer"},
 	}
 
-	err := es.AddExemplar(l1, 1, exemplar.Exemplar{Value: 1, Ts: 1})
+	err := es.AddExemplar(l1, exemplar.Exemplar{Value: 1, Ts: 1})
 	require.NoError(t, err)
-	err = es.AddExemplar(l2, 2, exemplar.Exemplar{Value: 2, Ts: 2})
+	err = es.AddExemplar(l2, exemplar.Exemplar{Value: 2, Ts: 2})
 	require.NoError(t, err)
-	err = es.AddExemplar(l2, 3, exemplar.Exemplar{Value: 3, Ts: 3})
+	err = es.AddExemplar(l2, exemplar.Exemplar{Value: 3, Ts: 3})
 	require.NoError(t, err)
 
 	_, ok := es.index[l1.String()]
 	require.False(t, ok)
 	require.Equal(t, indexEntry{1, 0}, es.index[l2.String()])
 
-	err = es.AddExemplar(l1, 4, exemplar.Exemplar{Value: 4, Ts: 4})
+	err = es.AddExemplar(l1, exemplar.Exemplar{Value: 4, Ts: 4})
 	require.NoError(t, err)
 
 	i := es.index[l2.String()]

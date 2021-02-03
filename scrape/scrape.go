@@ -1315,7 +1315,10 @@ loop:
 			switch err {
 			case nil:
 				if hasExemplar := p.Exemplar(&e); hasExemplar {
-					if err := app.AddExemplar(ce.lset, t, e); err != nil {
+					if !e.HasTs {
+						e.Ts = t
+					}
+					if err := app.AddExemplar(ce.lset, e); err != nil {
 						if err != storage.ErrDuplicateExemplar {
 							level.Debug(sl.l).Log("msg", "unexpected error", "error", err, "seriesLabels", ce.lset, "exemplar", e)
 						}
@@ -1355,7 +1358,7 @@ loop:
 			case nil:
 				// todo: This smells funny.
 				if hasExemplar := p.Exemplar(&e); hasExemplar {
-					if err := app.AddExemplar(lset, t, e); err != nil {
+					if err := app.AddExemplar(lset, e); err != nil {
 						if err != storage.ErrDuplicateExemplar {
 							level.Debug(sl.l).Log("msg", "unexpected error", "error", err, "seriesLabels", lset, "exemplar", e)
 						}

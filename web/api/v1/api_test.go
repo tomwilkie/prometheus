@@ -545,6 +545,8 @@ func setupRemote(s storage.Storage) *httptest.Server {
 	return httptest.NewServer(handler)
 }
 
+type commitFunc func()
+
 func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.ExemplarStorage, testLabelAPI bool) {
 	start := time.Unix(0, 0)
 
@@ -1481,27 +1483,21 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 			exemplars: []exemplarData{
 				exemplarData{
 					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
-					[]exemplar.ExemplarScrapeTimestamp{
+					[]exemplar.Exemplar{
 						{
-							Exemplar: exemplar.Exemplar{
-								Labels: labels.FromStrings("id", "abc"),
-								Value:  10,
-								Ts:     timestamp.FromTime(start.Add(2 * time.Second)),
-							},
-							ScrapeTimestamp: timestamp.FromTime(start.Add(2 * time.Second)),
+							Labels: labels.FromStrings("id", "abc"),
+							Value:  10,
+							Ts:     timestamp.FromTime(start.Add(2 * time.Second)),
 						},
 					},
 				},
 				exemplarData{
 					labels.FromStrings("__name__", "test_metric4", "foo", "asdf", "cluster", "abc"),
-					[]exemplar.ExemplarScrapeTimestamp{
+					[]exemplar.Exemplar{
 						{
-							Exemplar: exemplar.Exemplar{
-								Labels: labels.FromStrings("id", "lul"),
-								Value:  10,
-								Ts:     timestamp.FromTime(start.Add(4 * time.Second)),
-							},
-							ScrapeTimestamp: timestamp.FromTime(start.Add(4 * time.Second)),
+							Labels: labels.FromStrings("id", "lul"),
+							Value:  10,
+							Ts:     timestamp.FromTime(start.Add(4 * time.Second)),
 						},
 					},
 				},
@@ -1509,27 +1505,21 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 			response: []exemplarData{
 				exemplarData{
 					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
-					[]exemplar.ExemplarScrapeTimestamp{
+					[]exemplar.Exemplar{
 						{
-							Exemplar: exemplar.Exemplar{
-								Labels: labels.FromStrings("id", "abc"),
-								Value:  10,
-								Ts:     timestamp.FromTime(start.Add(2 * time.Second)),
-							},
-							ScrapeTimestamp: timestamp.FromTime(start.Add(2 * time.Second)),
+							Labels: labels.FromStrings("id", "abc"),
+							Value:  10,
+							Ts:     timestamp.FromTime(start.Add(2 * time.Second)),
 						},
 					},
 				},
 				exemplarData{
 					labels.FromStrings("__name__", "test_metric4", "foo", "asdf", "cluster", "abc"),
-					[]exemplar.ExemplarScrapeTimestamp{
+					[]exemplar.Exemplar{
 						{
-							Exemplar: exemplar.Exemplar{
-								Labels: labels.FromStrings("id", "lul"),
-								Value:  10,
-								Ts:     timestamp.FromTime(start.Add(4 * time.Second)),
-							},
-							ScrapeTimestamp: timestamp.FromTime(start.Add(4 * time.Second)),
+							Labels: labels.FromStrings("id", "lul"),
+							Value:  10,
+							Ts:     timestamp.FromTime(start.Add(4 * time.Second)),
 						},
 					},
 				},
@@ -1545,27 +1535,21 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 			exemplars: []exemplarData{
 				exemplarData{
 					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
-					[]exemplar.ExemplarScrapeTimestamp{
+					[]exemplar.Exemplar{
 						{
-							Exemplar: exemplar.Exemplar{
-								Labels: labels.FromStrings("id", "abc"),
-								Value:  10,
-								Ts:     53,
-							},
-							ScrapeTimestamp: 53,
+							Labels: labels.FromStrings("id", "abc"),
+							Value:  10,
+							Ts:     53,
 						},
 					},
 				},
 				exemplarData{
 					labels.FromStrings("__name__", "test_metric4", "foo", "qwerty", "cluster", "abc"),
-					[]exemplar.ExemplarScrapeTimestamp{
+					[]exemplar.Exemplar{
 						{
-							Exemplar: exemplar.Exemplar{
-								Labels: labels.FromStrings("id", "lul"),
-								Value:  10,
-								Ts:     153,
-							},
-							ScrapeTimestamp: 153,
+							Labels: labels.FromStrings("id", "lul"),
+							Value:  10,
+							Ts:     153,
 						},
 					},
 				},
@@ -1573,14 +1557,11 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 			response: []exemplarData{
 				exemplarData{
 					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
-					[]exemplar.ExemplarScrapeTimestamp{
+					[]exemplar.Exemplar{
 						{
-							Exemplar: exemplar.Exemplar{
-								Labels: labels.FromStrings("id", "abc"),
-								Value:  10,
-								Ts:     53,
-							},
-							ScrapeTimestamp: 53,
+							Labels: labels.FromStrings("id", "abc"),
+							Value:  10,
+							Ts:     53,
 						},
 					},
 				},
@@ -2035,7 +2016,10 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					es.Reset()
 					for _, te := range test.exemplars {
 						for _, e := range te.Exemplars {
-							es.Appender().AddExemplar(te.SeriesLabels, e.ScrapeTimestamp, e.Exemplar)
+							err := es.ExemplarAppender().AddExemplar(te.SeriesLabels, e)
+							if err != nil {
+								t.Fatal(err)
+							}
 						}
 					}
 

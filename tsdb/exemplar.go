@@ -62,10 +62,9 @@ type indexEntry struct {
 }
 
 type circularBufferEntry struct {
-	exemplar        exemplar.Exemplar
-	seriesLabels    labels.Labels
-	scrapeTimestamp int64
-	next            int
+	exemplar     exemplar.Exemplar
+	seriesLabels labels.Labels
+	next         int
 }
 
 // If we assume the average case 95 bytes per exemplar we can fit 5651272 exemplars in
@@ -82,16 +81,24 @@ func (ce *CircularExemplarStorage) Appender() storage.ExemplarAppender {
 	return ce
 }
 
+func (ce *CircularExemplarStorage) ExemplarAppender() storage.ExemplarAppender {
+	return ce
+}
+
+func (ce *CircularExemplarStorage) ExemplarQuerier(_ context.Context) (storage.ExemplarQuerier, error) {
+	return ce, nil
+}
+
 // TODO: separate wrapper struct for queries?
 func (ce *CircularExemplarStorage) Querier(ctx context.Context) (storage.ExemplarQuerier, error) {
 	return ce, nil
 }
 
 // Select returns exemplars for a given set of series labels hash.
-func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]exemplar.ExemplarScrapeTimestamp, error) {
+func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]exemplar.Exemplar, error) {
 
 	var (
-		ret []exemplar.ExemplarScrapeTimestamp
+		ret []exemplar.Exemplar
 		e   *circularBufferEntry
 		idx indexEntry
 		ok  bool
@@ -106,15 +113,15 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 
 	e = ce.exemplars[idx.first]
 	for {
-		if e.scrapeTimestamp < start {
+		if e.exemplar.Ts < start {
 			e = ce.exemplars[e.next]
 			continue
 		}
-		if e.scrapeTimestamp > end {
+		if e.exemplar.Ts > end {
 			break
 		}
 
-		ret = append(ret, exemplar.ExemplarScrapeTimestamp{Exemplar: e.exemplar, ScrapeTimestamp: e.scrapeTimestamp})
+		ret = append(ret, e.exemplar)
 		if e.next == -1 {
 			break
 		}
@@ -140,21 +147,20 @@ func (ce *CircularExemplarStorage) indexGc(cbe *circularBufferEntry) {
 	ce.index[l] = indexEntry{i, ce.index[l].last}
 }
 
-func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
+func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, e exemplar.Exemplar) error {
 	seriesLabels := l.String()
 	ce.lock.Lock()
 	defer ce.lock.Unlock()
-	idx, ok := ce.index[seriesLabels]
 
+	idx, ok := ce.index[seriesLabels]
 	if !ok {
 		ce.indexGc(ce.exemplars[ce.nextIndex])
 		// Default the prev value to -1 (which we use to detect that we've iterated through all exemplars for a series in Select)
 		// since this is the first exemplar stored for this series.
 		ce.exemplars[ce.nextIndex] = &circularBufferEntry{
-			exemplar:        e,
-			seriesLabels:    l,
-			scrapeTimestamp: t,
-			next:            -1}
+			exemplar:     e,
+			seriesLabels: l,
+			next:         -1}
 		ce.index[seriesLabels] = indexEntry{ce.nextIndex, ce.nextIndex}
 		ce.nextIndex = (ce.nextIndex + 1) % len(ce.exemplars)
 		return nil
@@ -166,20 +172,15 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, t int64, e exemp
 		return storage.ErrDuplicateExemplar
 	}
 
-	// maybe don't compare these two timestamps, one is the event timestamp on the client side
-	// the other is the scrape timestamp from prometheus' perspective, different clocks
-	// we can't rely on the exemplars event timestamps being in chronological order
-	// if e.Ts <= ce.exemplars[idx].Ts || t <= ce.exemplars[idx].scrapeTimestamp {
-	if t <= ce.exemplars[idx.last].scrapeTimestamp {
+	if e.Ts <= ce.exemplars[idx.last].exemplar.Ts {
 		ce.metrics.outOfOrderExemplars.Inc()
 		return storage.ErrOutOfOrderExemplar
 	}
 	ce.indexGc(ce.exemplars[ce.nextIndex])
 	ce.exemplars[ce.nextIndex] = &circularBufferEntry{
-		exemplar:        e,
-		seriesLabels:    l,
-		scrapeTimestamp: t,
-		next:            -1,
+		exemplar:     e,
+		seriesLabels: l,
+		next:         -1,
 	}
 
 	ce.exemplars[ce.index[seriesLabels].last].next = ce.nextIndex

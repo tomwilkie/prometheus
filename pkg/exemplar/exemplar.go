@@ -22,7 +22,7 @@ type Exemplar struct {
 	Labels labels.Labels `json:"labels"`
 	Value  float64       `json:"value"`
 	Ts     int64         `json:"timestamp"`
-	HasTs  bool          `json:"hasTimestamp"`
+	HasTs  bool          `json:"-"`
 }
 
 // ExemplarScrapeTimestamp is an exemplar with it's scrape timestamp.

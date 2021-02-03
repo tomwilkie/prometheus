@@ -171,26 +171,26 @@ func (f *fanoutAppender) AddFast(ref uint64, t int64, v float64) error {
 	return nil
 }
 
-func (f *fanoutAppender) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
-	if err := f.primary.AddExemplar(l, t, e); err != nil {
+func (f *fanoutAppender) AddExemplar(l labels.Labels, e exemplar.Exemplar) error {
+	if err := f.primary.AddExemplar(l, e); err != nil {
 		return err
 	}
 
 	for _, appender := range f.secondaries {
-		if err := appender.AddExemplar(l, t, e); err != nil {
+		if err := appender.AddExemplar(l, e); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (f *fanoutAppender) AddExemplarFast(ref uint64, t int64, v float64, e exemplar.Exemplar) error {
-	if err := f.primary.AddExemplarFast(ref, t, v, e); err != nil {
+func (f *fanoutAppender) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
+	if err := f.primary.AddExemplarFast(ref, e); err != nil {
 		return err
 	}
 
 	for _, appender := range f.secondaries {
-		if err := appender.AddExemplarFast(ref, t, v, e); err != nil {
+		if err := appender.AddExemplarFast(ref, e); err != nil {
 			return err
 		}
 	}

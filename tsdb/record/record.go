@@ -62,11 +62,10 @@ type RefSample struct {
 // RefExemplar is an exemplar with it's labels, timestamp, value the exemplar was collected/observed with,
 // scrape timestamp, and a reference to a series.
 type RefExemplar struct {
-	Ref             uint64
-	T               int64
-	V               float64
-	ScrapeTimestamp int64
-	Labels          labels.Labels
+	Ref    uint64
+	T      int64
+	V      float64
+	Labels labels.Labels
 }
 
 // Decoder decodes series, sample, and tombstone records.

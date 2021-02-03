@@ -227,11 +227,11 @@ func (t *timestampTracker) AddFast(_ uint64, ts int64, v float64) error {
 	return err
 }
 
-func (t *timestampTracker) AddExemplar(_ labels.Labels, _ int64, _ exemplar.Exemplar) error {
+func (t *timestampTracker) AddExemplar(_ labels.Labels, _ exemplar.Exemplar) error {
 	return nil
 }
 
-func (t *timestampTracker) AddExemplarFast(_ uint64, _ int64, _ float64, _ exemplar.Exemplar) error {
+func (t *timestampTracker) AddExemplarFast(_ uint64, _ exemplar.Exemplar) error {
 	return nil
 }
 

@@ -50,7 +50,7 @@ type SampleAndChunkQueryable interface {
 // ExemplarAppendable allows creating exemplar appenders.
 type ExemplarAppendable interface {
 	// Appender returns a new exemplar appender for the exemplar storage.
-	Appender() ExemplarAppender
+	ExemplarAppender() ExemplarAppender
 }
 
 // Storage ingests and manages samples, along with various indexes. All methods
@@ -132,7 +132,7 @@ type ExemplarQueryable interface {
 // Querier provides reading access to time series data.
 type ExemplarQuerier interface {
 	// Select returns a set of exemplars that have the given labels for the series they are associated with.
-	Select(start, end int64, l labels.Labels) ([]exemplar.ExemplarScrapeTimestamp, error)
+	Select(start, end int64, l labels.Labels) ([]exemplar.Exemplar, error)
 }
 
 // SelectHints specifies hints passed for data selections.
@@ -177,9 +177,9 @@ type Appender interface {
 	// faster than adding a sample by providing its full label set.
 	AddFast(ref uint64, t int64, v float64) error
 
-	AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error
+	AddExemplar(l labels.Labels, e exemplar.Exemplar) error
 
-	AddExemplarFast(ref uint64, t int64, v float64, e exemplar.Exemplar) error
+	AddExemplarFast(ref uint64, e exemplar.Exemplar) error
 
 	// Commit submits the collected samples and purges the batch. If Commit
 	// returns a non-nil error, it also rolls back all modifications made in
@@ -196,7 +196,7 @@ type Appender interface {
 // within Prometheus is in-memory only.
 type ExemplarAppender interface {
 	// Add adds an exemplar to the for the given series labels.
-	AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error
+	AddExemplar(l labels.Labels, e exemplar.Exemplar) error
 }
 
 // SeriesSet contains a set of series.

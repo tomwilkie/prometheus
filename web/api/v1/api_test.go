@@ -37,7 +37,6 @@ import (
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
-	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/route"
@@ -309,10 +308,58 @@ func TestEndpoints(t *testing.T) {
 			test_metric4{foo="bar", dup="1"} 1+0x100
 			test_metric4{foo="boo", dup="1"} 1+0x100
 			test_metric4{foo="boo"} 1+0x100
-			test_metric3{foo="qwerty", cluster="abc"} 1+0x100
-			test_metric4{foo="asdf", cluster="abc"} 1+0x97
-			test_metric4{foo="qwerty", cluster="abc"} 1+0x95
 	`)
+
+	start := time.Unix(0, 0)
+	exemplars := []exemplarData{
+		exemplarData{
+			labels.FromStrings("__name__", "test_metric3", "foo", "boo", "dup", "1"),
+			[]exemplar.Exemplar{
+				{
+					Labels: labels.FromStrings("id", "abc"),
+					Value:  10,
+					Ts:     timestamp.FromTime(start.Add(2 * time.Second)),
+				},
+			},
+		},
+		exemplarData{
+			labels.FromStrings("__name__", "test_metric4", "foo", "bar", "dup", "1"),
+			[]exemplar.Exemplar{
+				{
+					Labels: labels.FromStrings("id", "lul"),
+					Value:  10,
+					Ts:     timestamp.FromTime(start.Add(4 * time.Second)),
+				},
+			},
+		},
+		exemplarData{
+			labels.FromStrings("__name__", "test_metric3", "foo", "boo", "dup", "1"),
+			[]exemplar.Exemplar{
+				{
+					Labels: labels.FromStrings("id", "abc2"),
+					Value:  10,
+					Ts:     timestamp.FromTime(start.Add(4053 * time.Millisecond)),
+				},
+			},
+		},
+		exemplarData{
+			labels.FromStrings("__name__", "test_metric4", "foo", "bar", "dup", "1"),
+			[]exemplar.Exemplar{
+				{
+					Labels: labels.FromStrings("id", "lul2"),
+					Value:  10,
+					Ts:     timestamp.FromTime(start.Add(4153 * time.Millisecond)),
+				},
+			},
+		},
+	}
+
+	for _, ed := range exemplars {
+		if err := suite.ExemplarStorage().ExemplarAppender().AddExemplar(ed.SeriesLabels, ed.Exemplars[0]); err != nil {
+			t.Errorf("failed to add exemplar: %+v", ed.Exemplars[0])
+		}
+	}
+
 	require.NoError(t, err)
 	defer suite.Close()
 
@@ -1474,37 +1521,16 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 		{
 			endpoint: api.queryExemplars,
 			query: url.Values{
-				"query": []string{`test_metric3{cluster="abc"} - test_metric4{cluster="abc"}`},
+				"query": []string{`test_metric3{foo="boo"} - test_metric4{foo="bar"}`},
 				"start": []string{"0"},
-				"end":   []string{"10"},
+				"end":   []string{"4"},
 			},
 			// Note extra integer length of timestamps for exemplars because of millisecond preservation
 			// of timestamps within Prometheus (see timestamp package).
-			exemplars: []exemplarData{
-				exemplarData{
-					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
-					[]exemplar.Exemplar{
-						{
-							Labels: labels.FromStrings("id", "abc"),
-							Value:  10,
-							Ts:     timestamp.FromTime(start.Add(2 * time.Second)),
-						},
-					},
-				},
-				exemplarData{
-					labels.FromStrings("__name__", "test_metric4", "foo", "asdf", "cluster", "abc"),
-					[]exemplar.Exemplar{
-						{
-							Labels: labels.FromStrings("id", "lul"),
-							Value:  10,
-							Ts:     timestamp.FromTime(start.Add(4 * time.Second)),
-						},
-					},
-				},
-			},
+
 			response: []exemplarData{
 				exemplarData{
-					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
+					labels.FromStrings("__name__", "test_metric3", "foo", "boo", "dup", "1"),
 					[]exemplar.Exemplar{
 						{
 							Labels: labels.FromStrings("id", "abc"),
@@ -1514,7 +1540,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					},
 				},
 				exemplarData{
-					labels.FromStrings("__name__", "test_metric4", "foo", "asdf", "cluster", "abc"),
+					labels.FromStrings("__name__", "test_metric4", "foo", "bar", "dup", "1"),
 					[]exemplar.Exemplar{
 						{
 							Labels: labels.FromStrings("id", "lul"),
@@ -1528,40 +1554,18 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 		{
 			endpoint: api.queryExemplars,
 			query: url.Values{
-				"query": []string{`{foo="qwerty"}`},
-				"start": []string{".001"},
-				"end":   []string{".1"},
-			},
-			exemplars: []exemplarData{
-				exemplarData{
-					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
-					[]exemplar.Exemplar{
-						{
-							Labels: labels.FromStrings("id", "abc"),
-							Value:  10,
-							Ts:     53,
-						},
-					},
-				},
-				exemplarData{
-					labels.FromStrings("__name__", "test_metric4", "foo", "qwerty", "cluster", "abc"),
-					[]exemplar.Exemplar{
-						{
-							Labels: labels.FromStrings("id", "lul"),
-							Value:  10,
-							Ts:     153,
-						},
-					},
-				},
+				"query": []string{`{foo="boo"}`},
+				"start": []string{"4"},
+				"end":   []string{"4.1"},
 			},
 			response: []exemplarData{
 				exemplarData{
-					labels.FromStrings("__name__", "test_metric3", "foo", "qwerty", "cluster", "abc"),
+					labels.FromStrings("__name__", "test_metric3", "foo", "boo", "dup", "1"),
 					[]exemplar.Exemplar{
 						{
-							Labels: labels.FromStrings("id", "abc"),
+							Labels: labels.FromStrings("id", "abc2"),
 							Value:  10,
-							Ts:     53,
+							Ts:     4053,
 						},
 					},
 				},
@@ -1589,10 +1593,8 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"name": "foo",
 				},
 				response: []string{
-					"asdf",
 					"bar",
 					"boo",
-					"qwerty",
 				},
 			},
 			// Bad name parameter.
@@ -1626,10 +1628,8 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"end":   []string{"100"},
 				},
 				response: []string{
-					"asdf",
 					"bar",
 					"boo",
-					"qwerty",
 				},
 			},
 			// Start before LabelValues, end within LabelValues.
@@ -1643,10 +1643,8 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"end":   []string{"3"},
 				},
 				response: []string{
-					"asdf",
 					"bar",
 					"boo",
-					"qwerty",
 				},
 			},
 			// Start before LabelValues starts, end after LabelValues ends.
@@ -1660,10 +1658,8 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"end":   []string{"1970-02-01T00:02:03Z"},
 				},
 				response: []string{
-					"asdf",
 					"bar",
 					"boo",
-					"qwerty",
 				},
 			},
 			// Start with bad data, end within LabelValues.
@@ -1689,10 +1685,8 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"end":   []string{"100000000"},
 				},
 				response: []string{
-					"asdf",
 					"bar",
 					"boo",
-					"qwerty",
 				},
 			},
 			// Start and end after LabelValues ends.
@@ -1717,10 +1711,8 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"start": []string{"2"},
 				},
 				response: []string{
-					"asdf",
 					"bar",
 					"boo",
-					"qwerty",
 				},
 			},
 			// Only provide end within LabelValues, don't provide a start time.
@@ -1733,10 +1725,8 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"end": []string{"100"},
 				},
 				response: []string{
-					"asdf",
 					"bar",
 					"boo",
-					"qwerty",
 				},
 			},
 			// Label values with bad matchers.
@@ -1834,7 +1824,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 			// Label names.
 			{
 				endpoint: api.labelNames,
-				response: []string{"__name__", "cluster", "dup", "foo"},
+				response: []string{"__name__", "dup", "foo"},
 			},
 			// Start and end before Label names starts.
 			{
@@ -1852,7 +1842,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"start": []string{"1"},
 					"end":   []string{"100"},
 				},
-				response: []string{"__name__", "cluster", "dup", "foo"},
+				response: []string{"__name__", "dup", "foo"},
 			},
 			// Start before Label names, end within Label names.
 			{
@@ -1861,7 +1851,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"start": []string{"-1"},
 					"end":   []string{"10"},
 				},
-				response: []string{"__name__", "cluster", "dup", "foo"},
+				response: []string{"__name__", "dup", "foo"},
 			},
 
 			// Start before Label names starts, end after Label names ends.
@@ -1871,7 +1861,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"start": []string{"-1"},
 					"end":   []string{"100000"},
 				},
-				response: []string{"__name__", "cluster", "dup", "foo"},
+				response: []string{"__name__", "dup", "foo"},
 			},
 			// Start with bad data for Label names, end within Label names.
 			{
@@ -1889,7 +1879,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 					"start": []string{"1"},
 					"end":   []string{"1000000006"},
 				},
-				response: []string{"__name__", "cluster", "dup", "foo"},
+				response: []string{"__name__", "dup", "foo"},
 			},
 			// Start and end after Label names ends.
 			{
@@ -1906,7 +1896,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 				query: url.Values{
 					"start": []string{"4"},
 				},
-				response: []string{"__name__", "cluster", "dup", "foo"},
+				response: []string{"__name__", "dup", "foo"},
 			},
 			// Only provide End within Label names, don't provide a start time.
 			{
@@ -1914,7 +1904,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 				query: url.Values{
 					"end": []string{"20"},
 				},
-				response: []string{"__name__", "cluster", "dup", "foo"},
+				response: []string{"__name__", "dup", "foo"},
 			},
 			// Label names with bad matchers.
 			{
@@ -1949,7 +1939,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 				query: url.Values{
 					"match[]": []string{`test_metric3`},
 				},
-				response: []string{"__name__", "cluster", "dup", "foo"},
+				response: []string{"__name__", "dup", "foo"},
 			},
 			// Label names with matcher using label filter.
 			// There is no matching series.
@@ -2013,7 +2003,6 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 						tr.SetMetadataStoreForTargets(tm.identifier, &testMetaStore{Metadata: tm.metadata})
 					}
 
-					es.Reset()
 					for _, te := range test.exemplars {
 						for _, e := range te.Exemplars {
 							err := es.ExemplarAppender().AddExemplar(te.SeriesLabels, e)

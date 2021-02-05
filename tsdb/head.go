@@ -47,7 +47,7 @@ var (
 	// ErrInvalidSample is returned if an appended sample is not valid and can't
 	// be ingested.
 	ErrInvalidSample = errors.New("invalid sample")
-	// ErrInvalidExemplar is returned if an appended sample is not valid and can't
+	// ErrInvalidExemplar is returned if an appended exemplar is not valid and can't
 	// be ingested.
 	ErrInvalidExemplar = errors.New("invalid exemplar")
 	// ErrAppenderClosed is returned if an appender has already be successfully
@@ -1080,11 +1080,22 @@ func (a *initAppender) AddFast(ref uint64, t int64, v float64) error {
 }
 
 func (a *initAppender) AddExemplar(l labels.Labels, e exemplar.Exemplar) error {
-	return nil
+	if a.app != nil {
+		return a.app.AddExemplar(l, e)
+	}
+	// I don't think we should ever reach here given we would call Add before AddExemplar
+	// and we probably want to always base head/WAL min time on sample times.
+	a.head.initTime(e.Ts)
+	a.app = a.head.appender()
+
+	return a.app.AddExemplar(l, e)
 }
 
 func (a *initAppender) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
-	return nil
+	if a.app == nil {
+		return storage.ErrNotFound
+	}
+	return a.app.AddExemplarFast(ref, e)
 }
 
 func (a *initAppender) Commit() error {
@@ -1280,9 +1291,7 @@ func (a *headAppender) AddFast(ref uint64, t int64, v float64) error {
 }
 
 func (a *headAppender) AddExemplar(lset labels.Labels, e exemplar.Exemplar) error {
-	// this should be t && e.Ts < a.minValidTime?
 	if e.Ts < a.minValidTime {
-		// exemplar out of bounds?
 		return storage.ErrOutOfBounds
 	}
 
@@ -1368,13 +1377,6 @@ func (a *headAppender) log() error {
 
 		if err := a.head.wal.Log(rec); err != nil {
 			return errors.Wrap(err, "log series")
-		}
-	}
-	if len(a.exemplars) > 0 {
-		rec = enc.Exemplars(a.exemplars, buf)
-		buf = rec[:0]
-		if err := a.head.wal.Log(rec); err != nil {
-			return errors.Wrap(err, "log exemplars")
 		}
 	}
 	if len(a.samples) > 0 {

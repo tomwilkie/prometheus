@@ -374,7 +374,6 @@ $ curl -g 'http://localhost:9090/api/v1/query_exemplars?query=test_exemplar_metr
                     },
                     "value": 6,
                     "timestamp": 1600096945479,
-                    "hasTimestamp": true
                 }
             ]
         },
@@ -392,7 +391,6 @@ $ curl -g 'http://localhost:9090/api/v1/query_exemplars?query=test_exemplar_metr
                     },
                     "value": 19,
                     "timestamp": 1600096955479,
-                    "hasTimestamp": true
                 },
                 {
                     "labels": {
@@ -400,7 +398,6 @@ $ curl -g 'http://localhost:9090/api/v1/query_exemplars?query=test_exemplar_metr
                     },
                     "value": 20,
                     "timestamp": 1600096965479,
-                    "hasTimestamp": true
                 },
             ]
         }

@@ -96,7 +96,6 @@ func (ce *CircularExemplarStorage) Querier(ctx context.Context) (storage.Exempla
 
 // Select returns exemplars for a given set of series labels hash.
 func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]exemplar.Exemplar, error) {
-
 	var (
 		ret []exemplar.Exemplar
 		e   *circularBufferEntry
@@ -114,6 +113,9 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 	e = ce.exemplars[idx.first]
 	for {
 		if e.exemplar.Ts < start {
+			if e.next == -1 {
+				break
+			}
 			e = ce.exemplars[e.next]
 			continue
 		}

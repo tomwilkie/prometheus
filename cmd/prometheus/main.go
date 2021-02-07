@@ -819,7 +819,6 @@ func main() {
 
 				startTimeMargin := int64(2 * time.Duration(cfg.tsdb.MinBlockDuration).Seconds() * 1000)
 				localStorage.Set(db, startTimeMargin)
-				// todo: which context to pass? (callum)
 				close(dbOpen)
 				<-cancel
 				return nil

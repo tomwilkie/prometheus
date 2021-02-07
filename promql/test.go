@@ -56,8 +56,7 @@ type Test struct {
 
 	cmds []testCommand
 
-	storage         *teststorage.TestStorage
-	exemplarStorage storage.ExemplarStorage
+	storage *teststorage.TestStorage
 
 	queryEngine *Engine
 	context     context.Context

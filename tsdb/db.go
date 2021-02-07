@@ -787,7 +787,7 @@ func (db *DB) Appender(ctx context.Context) storage.Appender {
 }
 
 func (db *DB) ExemplarAppender() storage.ExemplarAppender {
-	return db.head.Appender(nil)
+	return db.head.Appender(context.TODO())
 }
 
 func (db *DB) Reset() {

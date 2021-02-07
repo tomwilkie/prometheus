@@ -1178,7 +1178,7 @@ func (h *Head) getExemplarBuffer() []record.RefExemplar {
 }
 
 func (h *Head) putExemplarBuffer(b []record.RefExemplar) {
-	//lint:ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
+	//nolint:staticcheck // Ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
 	h.exemplarsPool.Put(b[:0])
 }
 

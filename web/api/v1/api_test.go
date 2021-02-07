@@ -593,8 +593,6 @@ func setupRemote(s storage.Storage) *httptest.Server {
 	return httptest.NewServer(handler)
 }
 
-type commitFunc func()
-
 func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.ExemplarStorage, testLabelAPI bool) {
 	start := time.Unix(0, 0)
 

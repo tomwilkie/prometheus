@@ -14,6 +14,10 @@
 package exemplar
 
 import (
+	"bytes"
+	"encoding/json"
+	"strconv"
+
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
@@ -47,4 +51,32 @@ func (e Exemplar) Equals(e2 Exemplar) bool {
 	}
 
 	return true
+}
+
+func (e Exemplar) MarshalJSON() ([]byte, error) {
+	var nts bytes.Buffer
+	partial := int(e.Ts / 1000)
+	fraction := int(e.Ts % 1000)
+
+	nts.Write([]byte(strconv.Itoa(partial)))
+	if fraction != 0 {
+		nts.WriteRune('.')
+		if fraction < 100 {
+			nts.WriteRune('0')
+
+		}
+		if fraction < 10 {
+			nts.WriteRune('0')
+		}
+		nts.Write([]byte(strconv.Itoa(fraction)))
+	}
+	return json.Marshal(&struct {
+		Labels labels.Labels `json:"labels"`
+		Value  float64       `json:"value"`
+		Ts     string        `json:"timestamp"`
+	}{
+		Labels: e.Labels,
+		Value:  e.Value,
+		Ts:     nts.String(),
+	})
 }

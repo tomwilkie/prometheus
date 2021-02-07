@@ -89,7 +89,6 @@ func (ce *CircularExemplarStorage) ExemplarQuerier(_ context.Context) (storage.E
 	return ce, nil
 }
 
-// TODO: separate wrapper struct for queries?
 func (ce *CircularExemplarStorage) Querier(ctx context.Context) (storage.ExemplarQuerier, error) {
 	return ce, nil
 }

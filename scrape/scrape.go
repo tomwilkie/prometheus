@@ -1318,7 +1318,7 @@ loop:
 					if !e.HasTs {
 						e.Ts = t
 					}
-					if err := app.AddExemplar(ce.lset, e); err != nil {
+					if err := app.AddExemplarFast(ce.ref, e); err != nil {
 						if err != storage.ErrDuplicateExemplar {
 							level.Debug(sl.l).Log("msg", "unexpected error", "error", err, "seriesLabels", ce.lset, "exemplar", e)
 						}

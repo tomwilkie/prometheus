@@ -29,13 +29,6 @@ type Exemplar struct {
 	HasTs  bool          `json:"-"`
 }
 
-// ExemplarScrapeTimestamp is an exemplar with it's scrape timestamp.
-//nolint: golint
-type ExemplarScrapeTimestamp struct {
-	Exemplar        Exemplar
-	ScrapeTimestamp int64
-}
-
 // Equals compares if the exemplar e is the same as e2.
 func (e Exemplar) Equals(e2 Exemplar) bool {
 	if e.Labels.String() != e2.Labels.String() {

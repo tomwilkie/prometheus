@@ -37,6 +37,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/route"
@@ -312,7 +313,7 @@ func TestEndpoints(t *testing.T) {
 
 	start := time.Unix(0, 0)
 	exemplars := []exemplarData{
-		exemplarData{
+		{
 			labels.FromStrings("__name__", "test_metric3", "foo", "boo", "dup", "1"),
 			[]exemplar.Exemplar{
 				{
@@ -322,7 +323,7 @@ func TestEndpoints(t *testing.T) {
 				},
 			},
 		},
-		exemplarData{
+		{
 			labels.FromStrings("__name__", "test_metric4", "foo", "bar", "dup", "1"),
 			[]exemplar.Exemplar{
 				{
@@ -332,7 +333,7 @@ func TestEndpoints(t *testing.T) {
 				},
 			},
 		},
-		exemplarData{
+		{
 			labels.FromStrings("__name__", "test_metric3", "foo", "boo", "dup", "1"),
 			[]exemplar.Exemplar{
 				{
@@ -342,7 +343,7 @@ func TestEndpoints(t *testing.T) {
 				},
 			},
 		},
-		exemplarData{
+		{
 			labels.FromStrings("__name__", "test_metric4", "foo", "bar", "dup", "1"),
 			[]exemplar.Exemplar{
 				{
@@ -1529,7 +1530,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 			// of timestamps within Prometheus (see timestamp package).
 
 			response: []exemplarData{
-				exemplarData{
+				{
 					labels.FromStrings("__name__", "test_metric3", "foo", "boo", "dup", "1"),
 					[]exemplar.Exemplar{
 						{
@@ -1539,7 +1540,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 						},
 					},
 				},
-				exemplarData{
+				{
 					labels.FromStrings("__name__", "test_metric4", "foo", "bar", "dup", "1"),
 					[]exemplar.Exemplar{
 						{
@@ -1559,7 +1560,7 @@ func testEndpoints(t *testing.T, api *API, tr *testTargetRetriever, es storage.E
 				"end":   []string{"4.1"},
 			},
 			response: []exemplarData{
-				exemplarData{
+				{
 					labels.FromStrings("__name__", "test_metric3", "foo", "boo", "dup", "1"),
 					[]exemplar.Exemplar{
 						{

@@ -60,7 +60,6 @@ func TestAddExemplar(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, es.index[l.String()].last, 1, "exemplar was not stored correctly, location of newest exemplar for series in index did not update")
 	require.True(t, es.exemplars[es.index[l.String()].last].exemplar.Equals(e2), "exemplar was not stored correctly, expected %+v got: %+v", e2, es.exemplars[es.index[l.String()].last].exemplar)
-	require.True(t, es.exemplars[es.index[l.String()].last].exemplar.Ts == 3, "exemplar was not stored correctly, scrape timestamp was not correct")
 }
 
 func TestAddDuplicateExemplar(t *testing.T) {
@@ -215,7 +214,8 @@ func TestSelectExemplar(t *testing.T) {
 			},
 		},
 		Value: 0.1,
-		HasTs: false,
+		Ts:    12,
+		HasTs: true,
 	}
 
 	es.AddExemplar(l, e)
@@ -224,8 +224,8 @@ func TestSelectExemplar(t *testing.T) {
 	exemplars, err := es.Select(0, 100, l)
 	require.NoError(t, err)
 
-	expectedResult := []exemplar.ExemplarScrapeTimestamp{{Exemplar: e, ScrapeTimestamp: 1}}
-	require.True(t, reflect.DeepEqual(expectedResult, exemplars), "select did not return all exemplars")
+	expectedResult := []exemplar.Exemplar{e}
+	require.True(t, reflect.DeepEqual(expectedResult, exemplars), "select did not return expected exemplars\n\texpected: %+v\n\tactual: %+v\n", expectedResult, exemplars)
 }
 
 func TestSelectExemplarOrdering(t *testing.T) {
@@ -234,96 +234,78 @@ func TestSelectExemplarOrdering(t *testing.T) {
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
 	}
-	exemplars := []exemplar.ExemplarScrapeTimestamp{
+	exemplars := []exemplar.Exemplar{
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "a",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "a",
 				},
-				Value: 0.1,
-				Ts:    101,
 			},
-			ScrapeTimestamp: 100,
+			Value: 0.1,
+			Ts:    101,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "b",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "b",
 				},
-				Value: 0.2,
-				Ts:    102,
 			},
-			ScrapeTimestamp: 101,
+			Value: 0.2,
+			Ts:    102,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "c",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "c",
 				},
-				Value: 0.3,
-				Ts:    103,
 			},
-			ScrapeTimestamp: 102,
+			Value: 0.3,
+			Ts:    103,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "d",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "d",
 				},
-				Value: 0.4,
-				Ts:    104,
 			},
-			ScrapeTimestamp: 103,
+			Value: 0.4,
+			Ts:    104,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "e",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "e",
 				},
-				Value: 0.5,
-				Ts:    105,
 			},
-			ScrapeTimestamp: 104,
+			Value: 0.5,
+			Ts:    105,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "f",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "f",
 				},
-				Value: 0.6,
-				Ts:    106,
 			},
-			ScrapeTimestamp: 105,
+			Value: 0.6,
+			Ts:    106,
 		},
 	}
 
 	for _, e := range exemplars {
-		es.AddExemplar(l, e.Exemplar)
+		es.AddExemplar(l, e)
 	}
-	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, exemplars[5].Exemplar), "exemplar was not stored correctly")
+	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, exemplars[5]), "exemplar was not stored correctly")
 
 	ret, err := es.Select(100, 110, l)
 	require.NoError(t, err)
 
-	require.True(t, reflect.DeepEqual(exemplars[1:], ret), "select did not return all exemplars")
+	require.True(t, reflect.DeepEqual(exemplars[1:], ret), "select did not return expected exemplars\n\texpected: %+v\n\tactual: %+v\n", exemplars, ret)
 }
 
 func TestSelectExemplar_Circ(t *testing.T) {
@@ -332,50 +314,41 @@ func TestSelectExemplar_Circ(t *testing.T) {
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
 	}
-	exemplars := []exemplar.ExemplarScrapeTimestamp{
+	exemplars := []exemplar.Exemplar{
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "qwerty",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "qwerty",
 				},
-				Value: 0.1,
-				Ts:    101,
 			},
-			ScrapeTimestamp: 100,
+			Value: 0.1,
+			Ts:    101,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "zxcvbn",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "zxcvbn",
 				},
-				Value: 0.1,
-				Ts:    102,
 			},
-			ScrapeTimestamp: 101,
+			Value: 0.1,
+			Ts:    102,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "asdfgh",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "asdfgh",
 				},
-				Value: 0.1,
-				Ts:    103,
 			},
-			ScrapeTimestamp: 102,
+			Value: 0.1,
+			Ts:    103,
 		},
 	}
 
 	for i, e := range exemplars {
-		err := es.AddExemplar(l, e.Exemplar)
+		err := es.AddExemplar(l, e)
 		require.NoError(t, err)
 		require.Equal(t, es.index[l.String()].last, i, "exemplar was not stored correctly")
 	}
@@ -385,7 +358,7 @@ func TestSelectExemplar_Circ(t *testing.T) {
 	require.True(t, len(el) == 3, "didn't get expected one exemplar")
 
 	for i := range exemplars {
-		require.True(t, el[i].Equals(exemplars[i].Exemplar), "")
+		require.True(t, el[i].Equals(exemplars[i]), "returned exemplar did not matched expected, actual: %+v expected %+v", el[i], exemplars[i])
 	}
 }
 
@@ -470,63 +443,51 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
 	}
-	exemplars := []exemplar.ExemplarScrapeTimestamp{
+	exemplars := []exemplar.Exemplar{
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "qwerty",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "qwerty",
 				},
-				Value: 0.1,
-				Ts:    101,
 			},
-			ScrapeTimestamp: 100,
+			Value: 0.1,
+			Ts:    101,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "zxcvbn",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "zxcvbn",
 				},
-				Value: 0.1,
-				Ts:    102,
 			},
-			ScrapeTimestamp: 101,
+			Value: 0.1,
+			Ts:    102,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "asdfgh",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "asdfgh",
 				},
-				Value: 0.1,
-				Ts:    103,
 			},
-			ScrapeTimestamp: 102,
+			Value: 0.1,
+			Ts:    103,
 		},
 		{
-			Exemplar: exemplar.Exemplar{
-				Labels: labels.Labels{
-					labels.Label{
-						Name:  "traceID",
-						Value: "hjkl;",
-					},
+			Labels: labels.Labels{
+				labels.Label{
+					Name:  "traceID",
+					Value: "hjkl;",
 				},
-				Value: 0.1,
-				Ts:    106,
 			},
-			ScrapeTimestamp: 105,
+			Value: 0.1,
+			Ts:    106,
 		},
 	}
 
 	for i, e := range exemplars {
-		err := es.AddExemplar(l, e.Exemplar)
+		err := es.AddExemplar(l, e)
 		require.NoError(t, err)
 		require.Equal(t, es.index[l.String()].last, i, "exemplar was not stored correctly")
 	}
@@ -534,11 +495,7 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 	el, err := es.Select(102, 105, l)
 	require.NoError(t, err)
 	require.True(t, len(el) == 2, "didn't get expected one exemplar")
-
-	// todo: smelly
-	for i := range el {
-		require.True(t, el[i].Equals(exemplars[i+2].Exemplar), "")
-	}
+	require.True(t, reflect.DeepEqual(el, exemplars[1:3]), "returned exemplar did not matched expected\n\tactual: %+v\n\texpected %+v", el, exemplars[1:3])
 }
 
 func TestIndexOverwrite(t *testing.T) {

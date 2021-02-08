@@ -30,13 +30,17 @@ type Exemplar struct {
 	HasTs  bool          `json:"-"`
 }
 
-// Equals compares if the exemplar e is the same as e2.
+// Equals compares if the exemplar e is the same as e2. Note that if HasTs is false for
+// both exemplars then the timestamps will be ignored for the comparison. This can come up
+// when an exemplar is exported without it's own timestamp, in which case the scrape timestamp
+// is assigned to the Ts field. However we still want to treat the same exemplar, scraped without/
+// an exported timestamp, as a duplicate of itself for each subsequent scrape.
 func (e Exemplar) Equals(e2 Exemplar) bool {
 	if e.Labels.String() != e2.Labels.String() {
 		return false
 	}
 
-	if e.Ts != e2.Ts {
+	if (e.HasTs || e2.HasTs) && e.Ts != e2.Ts {
 		return false
 	}
 

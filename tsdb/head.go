@@ -333,10 +333,14 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars i
 	}
 
 	var err error
-	es, err := NewCircularExemplarStorage(numExemplars, r)
-	if err != nil {
-		return nil, err
+	var es *CircularExemplarStorage
+	if numExemplars != 0 {
+		es, err = NewCircularExemplarStorage(numExemplars, r)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	h := &Head{
 		wal:        wal,
 		logger:     l,

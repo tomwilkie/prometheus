@@ -15,9 +15,8 @@ package tsdb
 
 import (
 	"context"
+	"fmt"
 	"sync"
-
-	"github.com/pkg/errors"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pkg/exemplar"
@@ -53,9 +52,12 @@ func newExemplarMetrics(r prometheus.Registerer) *exemplarMetrics {
 type CircularExemplarStorage struct {
 	metrics   *exemplarMetrics
 	lock      sync.RWMutex
-	index     map[string]indexEntry
 	exemplars []*circularBufferEntry
 	nextIndex int
+
+	// Map of series labels as a string to index entry, which points to the first
+	// and last exemplar for the series the exemplars circular buffer.
+	index map[string]*indexEntry
 }
 
 type indexEntry struct {
@@ -73,11 +75,11 @@ type circularBufferEntry struct {
 // 1GB of extra memory, accounting for the fact that this is heap allocated space.
 func NewCircularExemplarStorage(len int, reg prometheus.Registerer) (*CircularExemplarStorage, error) {
 	if len < 1 {
-		return nil, errors.Errorf("must initialize exemplar storage with space for at least 1 exemplar, %d is invalid", len)
+		return nil, fmt.Errorf("must initialize exemplar storage with space for at least 1 exemplar, %d is invalid", len)
 	}
 	return &CircularExemplarStorage{
 		exemplars: make([]*circularBufferEntry, len),
-		index:     make(map[string]indexEntry),
+		index:     make(map[string]*indexEntry),
 		metrics:   newExemplarMetrics(reg),
 	}, nil
 }
@@ -103,7 +105,7 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 	var (
 		ret []exemplar.Exemplar
 		e   *circularBufferEntry
-		idx indexEntry
+		idx *indexEntry
 		ok  bool
 	)
 
@@ -136,7 +138,7 @@ func (ce *CircularExemplarStorage) Select(start, end int64, l labels.Labels) ([]
 	return ret, nil
 }
 
-// Takes the circularBufferEntry that will be overwritten and updates the
+// indexGc takes the circularBufferEntry that will be overwritten and updates the
 // storages index for that entries labelset if necessary.
 func (ce *CircularExemplarStorage) indexGc(cbe *circularBufferEntry) {
 	if cbe == nil {
@@ -150,7 +152,7 @@ func (ce *CircularExemplarStorage) indexGc(cbe *circularBufferEntry) {
 		return
 	}
 
-	ce.index[l] = indexEntry{i, ce.index[l].last}
+	ce.index[l] = &indexEntry{i, ce.index[l].last}
 }
 
 func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, e exemplar.Exemplar) error {
@@ -161,13 +163,13 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, e exemplar.Exemp
 	idx, ok := ce.index[seriesLabels]
 	if !ok {
 		ce.indexGc(ce.exemplars[ce.nextIndex])
-		// Default the prev value to -1 (which we use to detect that we've iterated through all exemplars for a series in Select)
+		// Default the next value to -1 (which we use to detect that we've iterated through all exemplars for a series in Select)
 		// since this is the first exemplar stored for this series.
 		ce.exemplars[ce.nextIndex] = &circularBufferEntry{
 			exemplar:     e,
 			seriesLabels: l,
 			next:         -1}
-		ce.index[seriesLabels] = indexEntry{ce.nextIndex, ce.nextIndex}
+		ce.index[seriesLabels] = &indexEntry{ce.nextIndex, ce.nextIndex}
 		ce.nextIndex = (ce.nextIndex + 1) % len(ce.exemplars)
 		return nil
 	}
@@ -190,7 +192,7 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, e exemplar.Exemp
 	}
 
 	ce.exemplars[ce.index[seriesLabels].last].next = ce.nextIndex
-	ce.index[seriesLabels] = indexEntry{ce.index[seriesLabels].first, ce.nextIndex}
+	ce.index[seriesLabels].last = ce.nextIndex
 	ce.nextIndex = (ce.nextIndex + 1) % len(ce.exemplars)
 	return nil
 }
@@ -198,5 +200,5 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, e exemplar.Exemp
 // For use in tests, clears the entire exemplar storage.
 func (ce *CircularExemplarStorage) Reset() {
 	ce.exemplars = make([]*circularBufferEntry, len(ce.exemplars))
-	ce.index = make(map[string]indexEntry)
+	ce.index = make(map[string]*indexEntry)
 }

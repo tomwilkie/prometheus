@@ -331,11 +331,17 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars i
 	if opts.SeriesCallback == nil {
 		opts.SeriesCallback = &noopSeriesLifecycleCallback{}
 	}
+
+	var err error
+	es, err := NewCircularExemplarStorage(numExemplars, r)
+	if err != nil {
+		return nil, err
+	}
 	h := &Head{
 		wal:        wal,
 		logger:     l,
 		opts:       opts,
-		exemplars:  NewCircularExemplarStorage(numExemplars, r),
+		exemplars:  es,
 		series:     newStripeSeries(opts.StripeSize, opts.SeriesCallback),
 		symbols:    map[string]struct{}{},
 		postings:   index.NewUnorderedMemPostings(),
@@ -358,7 +364,6 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars i
 		opts.ChunkPool = chunkenc.NewPool()
 	}
 
-	var err error
 	h.chunkDiskMapper, err = chunks.NewChunkDiskMapper(
 		mmappedChunksDir(opts.ChunkDirRoot),
 		opts.ChunkPool,

@@ -25,7 +25,8 @@ import (
 )
 
 func TestAddExemplar(t *testing.T) {
-	es := NewCircularExemplarStorage(2, nil)
+	es, err := NewCircularExemplarStorage(2, nil)
+	require.NoError(t, err)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -41,7 +42,7 @@ func TestAddExemplar(t *testing.T) {
 		Ts:    1,
 	}
 
-	err := es.AddExemplar(l, e)
+	err = es.AddExemplar(l, e)
 	require.NoError(t, err)
 	require.Equal(t, es.index[l.String()].last, 0, "exemplar was not stored correctly")
 
@@ -63,7 +64,8 @@ func TestAddExemplar(t *testing.T) {
 }
 
 func TestAddDuplicateExemplar(t *testing.T) {
-	es := NewCircularExemplarStorage(5, nil)
+	es, err := NewCircularExemplarStorage(5, nil)
+	require.NoError(t, err)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -83,13 +85,14 @@ func TestAddDuplicateExemplar(t *testing.T) {
 	es.AddExemplar(l, e)
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
-	err := es.AddExemplar(l, e)
+	err = es.AddExemplar(l, e)
 	require.Error(t, err, "no error when attempting to add duplicate exemplar")
 	require.True(t, err == storage.ErrDuplicateExemplar, "duplicate exemplar was added")
 }
 
 func TestAddOutOfOrderExemplar(t *testing.T) {
-	es := NewCircularExemplarStorage(5, nil)
+	es, err := NewCircularExemplarStorage(5, nil)
+	require.NoError(t, err)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -120,13 +123,14 @@ func TestAddOutOfOrderExemplar(t *testing.T) {
 	es.AddExemplar(l, e)
 	require.True(t, reflect.DeepEqual(es.exemplars[0].exemplar, e), "exemplar was not stored correctly")
 
-	err := es.AddExemplar(l, e2)
+	err = es.AddExemplar(l, e2)
 	require.Error(t, err, "no error when attempting to add out of order exemplar")
 	require.True(t, err == storage.ErrOutOfOrderExemplar, "out of order exemplar was added")
 }
 
 func TestAddExtraExemplar(t *testing.T) {
-	es := NewCircularExemplarStorage(5, nil)
+	es, err := NewCircularExemplarStorage(5, nil)
+	require.NoError(t, err)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -201,7 +205,8 @@ func TestAddExtraExemplar(t *testing.T) {
 }
 
 func TestSelectExemplar(t *testing.T) {
-	es := NewCircularExemplarStorage(5, nil)
+	es, err := NewCircularExemplarStorage(5, nil)
+	require.NoError(t, err)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -229,7 +234,8 @@ func TestSelectExemplar(t *testing.T) {
 }
 
 func TestSelectExemplarOrdering(t *testing.T) {
-	es := NewCircularExemplarStorage(5, nil)
+	es, err := NewCircularExemplarStorage(5, nil)
+	require.NoError(t, err)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -309,7 +315,8 @@ func TestSelectExemplarOrdering(t *testing.T) {
 }
 
 func TestSelectExemplar_Circ(t *testing.T) {
-	es := NewCircularExemplarStorage(3, nil)
+	es, err := NewCircularExemplarStorage(3, nil)
+	require.NoError(t, err)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -365,7 +372,8 @@ func TestSelectExemplar_Circ(t *testing.T) {
 // This is a set of stored exemplars I scraped and stored locally that resulted in an infinite loop.
 // This test ensures Select doesn't infinitely loop on them anymore.
 func TestSelectExemplar_OverwriteLoop(t *testing.T) {
-	es := NewCircularExemplarStorage(10, nil)
+	es, err := NewCircularExemplarStorage(10, nil)
+	require.NoError(t, err)
 
 	l1 := labels.Labels{
 		{Name: "__name__", Value: "test_metric"},
@@ -438,7 +446,8 @@ func TestSelectExemplar_OverwriteLoop(t *testing.T) {
 }
 
 func TestSelectExemplar_TimeRange(t *testing.T) {
-	es := NewCircularExemplarStorage(4, nil)
+	es, err := NewCircularExemplarStorage(4, nil)
+	require.NoError(t, err)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -499,7 +508,8 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 }
 
 func TestIndexOverwrite(t *testing.T) {
-	es := NewCircularExemplarStorage(2, nil)
+	es, err := NewCircularExemplarStorage(2, nil)
+	require.NoError(t, err)
 
 	l1 := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -509,7 +519,7 @@ func TestIndexOverwrite(t *testing.T) {
 		{Name: "service", Value: "qwer"},
 	}
 
-	err := es.AddExemplar(l1, exemplar.Exemplar{Value: 1, Ts: 1})
+	err = es.AddExemplar(l1, exemplar.Exemplar{Value: 1, Ts: 1})
 	require.NoError(t, err)
 	err = es.AddExemplar(l2, exemplar.Exemplar{Value: 2, Ts: 2})
 	require.NoError(t, err)

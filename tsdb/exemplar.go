@@ -17,6 +17,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pkg/exemplar"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -69,12 +71,15 @@ type circularBufferEntry struct {
 
 // If we assume the average case 95 bytes per exemplar we can fit 5651272 exemplars in
 // 1GB of extra memory, accounting for the fact that this is heap allocated space.
-func NewCircularExemplarStorage(len int, reg prometheus.Registerer) *CircularExemplarStorage {
+func NewCircularExemplarStorage(len int, reg prometheus.Registerer) (*CircularExemplarStorage, error) {
+	if len < 1 {
+		return nil, errors.Errorf("must initialize exemplar storage with space for at least 1 exemplar, %d is invalid", len)
+	}
 	return &CircularExemplarStorage{
 		exemplars: make([]*circularBufferEntry, len),
 		index:     make(map[string]indexEntry),
 		metrics:   newExemplarMetrics(reg),
-	}
+	}, nil
 }
 
 func (ce *CircularExemplarStorage) Appender() storage.ExemplarAppender {

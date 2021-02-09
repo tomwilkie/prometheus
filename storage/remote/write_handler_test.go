@@ -138,12 +138,12 @@ func (*mockAppendable) Rollback() error {
 	return fmt.Errorf("not implemented")
 }
 
-func (*mockAppendable) AddExemplar(l labels.Labels, t int64, e exemplar.Exemplar) error {
+func (*mockAppendable) AddExemplar(l labels.Labels, e exemplar.Exemplar) error {
 	// noop until we implement exemplars over remote write
 	return nil
 }
 
-func (*mockAppendable) AddExemplarFast(ref uint64, t int64, v float64, e exemplar.Exemplar) error {
+func (*mockAppendable) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
 	// noop until we implement exemplars over remote write
 	return nil
 }

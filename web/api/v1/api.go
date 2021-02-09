@@ -493,15 +493,13 @@ func (api *API) queryRange(r *http.Request) (result apiFuncResult) {
 }
 
 func (api *API) queryExemplars(r *http.Request) apiFuncResult {
-	start, err := parseTime(r.FormValue("start"))
+	start, err := parseTimeParam(r, "start", minTime)
 	if err != nil {
-		err = errors.Wrapf(err, "invalid parameter 'start'")
-		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
+		return invalidParamError(err, "start")
 	}
-	end, err := parseTime(r.FormValue("end"))
+	end, err := parseTimeParam(r, "end", minTime)
 	if err != nil {
-		err = errors.Wrapf(err, "invalid parameter 'end'")
-		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
+		return invalidParamError(err, "end")
 	}
 	if end.Before(start) {
 		err := errors.New("end timestamp must not be before start time")

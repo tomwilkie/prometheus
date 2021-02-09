@@ -1178,15 +1178,15 @@ func (h *Head) putAppendBuffer(b []record.RefSample) {
 	h.appendPool.Put(b[:0])
 }
 
-func (h *Head) getExemplarBuffer() []record.RefExemplar {
+func (h *Head) getExemplarBuffer() []refExemplar {
 	b := h.exemplarsPool.Get()
 	if b == nil {
-		return make([]record.RefExemplar, 0, 512)
+		return make([]refExemplar, 0, 512)
 	}
-	return b.([]record.RefExemplar)
+	return b.([]refExemplar)
 }
 
-func (h *Head) putExemplarBuffer(b []record.RefExemplar) {
+func (h *Head) putExemplarBuffer(b []refExemplar) {
 	//nolint:staticcheck // Ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
 	h.exemplarsPool.Put(b[:0])
 }
@@ -1217,6 +1217,13 @@ func (h *Head) putBytesBuffer(b []byte) {
 	h.bytesPool.Put(b[:0])
 }
 
+// We don't make use of record.RefExemplar here
+// because we need the HasTs field from exemplar.Exemplar struct.
+type refExemplar struct {
+	ref      uint64
+	exemplar exemplar.Exemplar
+}
+
 type headAppender struct {
 	head         *Head
 	minValidTime int64 // No samples below this timestamp are allowed.
@@ -1224,7 +1231,7 @@ type headAppender struct {
 
 	series       []record.RefSeries
 	samples      []record.RefSample
-	exemplars    []record.RefExemplar
+	exemplars    []refExemplar
 	sampleSeries []*memSeries
 
 	appendID, cleanupAppendIDsBelow uint64
@@ -1360,12 +1367,7 @@ func (a *headAppender) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
 	// 	a.maxt = t
 	// }
 
-	a.exemplars = append(a.exemplars, record.RefExemplar{
-		Ref:    ref,
-		T:      e.Ts,
-		V:      e.Value,
-		Labels: e.Labels,
-	})
+	a.exemplars = append(a.exemplars, refExemplar{ref, e})
 	return nil
 }
 
@@ -1413,14 +1415,12 @@ func (a *headAppender) Commit() (err error) {
 	// no errors logging to WAL, so pass the exemplars along to the
 	// in memory storage
 	for _, e := range a.exemplars {
-		s := a.head.series.getByID(e.Ref)
-		// todo: check error
-		a.head.exemplars.AddExemplar(s.lset, exemplar.Exemplar{
-			Labels: e.Labels,
-			Value:  e.V,
-			Ts:     e.T,
-			// hasts field?
-		})
+		s := a.head.series.getByID(e.ref)
+		// todo: proper
+		if err := a.head.exemplars.AddExemplar(s.lset, e.exemplar); err != nil {
+			// todo: do we want to error out here?
+			return errors.Wrap(err, "adding exemplars")
+		}
 	}
 
 	defer a.head.metrics.activeAppenders.Dec()

@@ -27,7 +27,6 @@ type Exemplar struct {
 	Labels labels.Labels
 	Value  float64
 	Ts     int64
-	HasTs  bool
 }
 
 // Equals compares if the exemplar e is the same as e2. Note that if HasTs is false for
@@ -40,7 +39,7 @@ func (e Exemplar) Equals(e2 Exemplar) bool {
 		return false
 	}
 
-	if (e.HasTs || e2.HasTs) && e.Ts != e2.Ts {
+	if e.Ts != e2.Ts {
 		return false
 	}
 

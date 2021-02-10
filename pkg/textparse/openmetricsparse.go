@@ -184,9 +184,9 @@ func (p *OpenMetricsParser) Metric(l *labels.Labels) string {
 
 // Exemplar writes the exemplar of the current sample into the passed
 // exemplar. It returns the whether an exemplar exists.
-func (p *OpenMetricsParser) Exemplar(e *exemplar.Exemplar) bool {
+func (p *OpenMetricsParser) Exemplar(e *exemplar.Exemplar) (bool, bool) {
 	if len(p.exemplar) == 0 {
-		return false
+		return false, false
 	}
 
 	// Allocate the full immutable string immediately, so we just
@@ -195,7 +195,6 @@ func (p *OpenMetricsParser) Exemplar(e *exemplar.Exemplar) bool {
 
 	e.Value = p.exemplarVal
 	if p.hasExemplarTs {
-		e.HasTs = true
 		e.Ts = p.exemplarTs
 	}
 
@@ -211,7 +210,7 @@ func (p *OpenMetricsParser) Exemplar(e *exemplar.Exemplar) bool {
 	// Sort the labels.
 	sort.Sort(e.Labels)
 
-	return true
+	return true, p.hasExemplarTs
 }
 
 // nextToken returns the next token from the openMetricsLexer.

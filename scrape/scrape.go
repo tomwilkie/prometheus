@@ -1314,8 +1314,8 @@ loop:
 			_, err = sl.checkAddError(ce, met, tp, err, &sampleLimitErr, &appErrs)
 			switch err {
 			case nil:
-				if hasExemplar := p.Exemplar(&e); hasExemplar {
-					if !e.HasTs {
+				if hasExemplar, hasTimestamp := p.Exemplar(&e); hasExemplar {
+					if !hasTimestamp {
 						e.Ts = t
 					}
 					if err := app.AddExemplarFast(ce.ref, e); err != nil {
@@ -1361,7 +1361,10 @@ loop:
 				break loop
 			}
 
-			if hasExemplar := p.Exemplar(&e); hasExemplar {
+			if hasExemplar, hasTimestamp := p.Exemplar(&e); hasExemplar {
+				if !hasTimestamp {
+					e.Ts = t
+				}
 				if err := app.AddExemplar(lset, e); err != nil {
 					if err != storage.ErrDuplicateExemplar {
 						level.Debug(sl.l).Log("msg", "Unexpected error", "error", err, "seriesLabels", lset, "exemplar", e)

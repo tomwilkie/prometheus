@@ -1507,6 +1507,7 @@ func TestScrapeLoopAppendExemplar(t *testing.T) {
 		discoveryLabels []string
 		expLset         labels.Labels
 		expValue        float64
+		hasExemplars    bool
 		exemplar        []exemplar.Exemplar
 	}{
 		{
@@ -1523,6 +1524,7 @@ func TestScrapeLoopAppendExemplar(t *testing.T) {
 			discoveryLabels: []string{"n", "2"},
 			expLset:         labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
 			expValue:        0,
+			hasExemplars:    true,
 			exemplar: []exemplar.Exemplar{
 				{Labels: labels.FromStrings("a", "abc"), Value: 1},
 			},
@@ -1532,8 +1534,9 @@ func TestScrapeLoopAppendExemplar(t *testing.T) {
 			discoveryLabels: []string{"n", "2"},
 			expLset:         labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
 			expValue:        0,
+			hasExemplars:    true,
 			exemplar: []exemplar.Exemplar{
-				{Labels: labels.FromStrings("a", "abc"), Value: 1, Ts: 10000000, HasTs: true},
+				{Labels: labels.FromStrings("a", "abc"), Value: 1, Ts: 10000000},
 			},
 		},
 	}
@@ -1560,6 +1563,15 @@ func TestScrapeLoopAppendExemplar(t *testing.T) {
 		)
 
 		now := time.Now()
+
+		// We need to set the timestamp for exp exemplars that does not have a timestamp.
+		if test.hasExemplars {
+			for i := range test.exemplar {
+				if test.exemplar[i].Ts == 0 {
+					test.exemplar[i].Ts = timestamp.FromTime(now)
+				}
+			}
+		}
 
 		_, _, _, err := sl.append(app, []byte(test.scrapeLabels), "application/openmetrics-text", now)
 		require.NoError(t, err)

@@ -1314,15 +1314,16 @@ loop:
 			_, err = sl.checkAddError(ce, met, tp, err, &sampleLimitErr, &appErrs)
 			switch err {
 			case nil:
-				if hasExemplar, hasTimestamp := p.Exemplar(&e); hasExemplar {
-					if !hasTimestamp {
-						e.Ts = t
-					}
-					if err := app.AddExemplarFast(ce.ref, e); err != nil {
-						if err != storage.ErrDuplicateExemplar {
-							level.Debug(sl.l).Log("msg", "Unexpected error", "error", err, "seriesLabels", ce.lset, "exemplar", e)
-						}
-					}
+				// If the appending of sample errored, no point in trying for exemplars.
+				hasExemplar, hasTimestamp := p.Exemplar(&e)
+				if !hasExemplar {
+					break
+				}
+				if !hasTimestamp {
+					e.Ts = t
+				}
+				if err = app.AddExemplarFast(ce.ref, e); err != nil && err != storage.ErrDuplicateExemplar {
+					break loop
 				}
 			// In theory this should never happen.
 			case storage.ErrNotFound:
@@ -1353,23 +1354,11 @@ loop:
 			var ref uint64
 			ref, err = app.Add(lset, t, v)
 			sampleAdded, err = sl.checkAddError(nil, met, tp, err, &sampleLimitErr, &appErrs)
-
 			if err != nil {
 				if err != storage.ErrNotFound {
 					level.Debug(sl.l).Log("msg", "Unexpected error", "series", string(met), "err", err)
 				}
 				break loop
-			}
-
-			if hasExemplar, hasTimestamp := p.Exemplar(&e); hasExemplar {
-				if !hasTimestamp {
-					e.Ts = t
-				}
-				if err := app.AddExemplar(lset, e); err != nil {
-					if err != storage.ErrDuplicateExemplar {
-						level.Debug(sl.l).Log("msg", "Unexpected error", "error", err, "seriesLabels", lset, "exemplar", e)
-					}
-				}
 			}
 
 			if tp == nil {
@@ -1379,6 +1368,15 @@ loop:
 			sl.cache.addRef(mets, ref, lset, hash)
 			if sampleAdded && sampleLimitErr == nil {
 				seriesAdded++
+			}
+
+			if hasExemplar, hasTimestamp := p.Exemplar(&e); hasExemplar {
+				if !hasTimestamp {
+					e.Ts = t
+				}
+				if err = app.AddExemplar(lset, e); err != nil && err != storage.ErrDuplicateExemplar {
+					break loop
+				}
 			}
 		}
 

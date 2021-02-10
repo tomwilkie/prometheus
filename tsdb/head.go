@@ -1175,15 +1175,15 @@ func (h *Head) putAppendBuffer(b []record.RefSample) {
 	h.appendPool.Put(b[:0])
 }
 
-func (h *Head) getExemplarBuffer() []refExemplar {
+func (h *Head) getExemplarBuffer() []exemplarWithSeriesRef {
 	b := h.exemplarsPool.Get()
 	if b == nil {
-		return make([]refExemplar, 0, 512)
+		return make([]exemplarWithSeriesRef, 0, 512)
 	}
-	return b.([]refExemplar)
+	return b.([]exemplarWithSeriesRef)
 }
 
-func (h *Head) putExemplarBuffer(b []refExemplar) {
+func (h *Head) putExemplarBuffer(b []exemplarWithSeriesRef) {
 	//nolint:staticcheck // Ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
 	h.exemplarsPool.Put(b[:0])
 }
@@ -1214,9 +1214,7 @@ func (h *Head) putBytesBuffer(b []byte) {
 	h.bytesPool.Put(b[:0])
 }
 
-// We don't make use of record.RefExemplar here
-// because we need the HasTs field from exemplar.Exemplar struct.
-type refExemplar struct {
+type exemplarWithSeriesRef struct {
 	ref      uint64
 	exemplar exemplar.Exemplar
 }
@@ -1229,7 +1227,7 @@ type headAppender struct {
 
 	series       []record.RefSeries
 	samples      []record.RefSample
-	exemplars    []refExemplar
+	exemplars    []exemplarWithSeriesRef
 	sampleSeries []*memSeries
 
 	appendID, cleanupAppendIDsBelow uint64
@@ -1365,7 +1363,7 @@ func (a *headAppender) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
 	// 	a.maxt = t
 	// }
 
-	a.exemplars = append(a.exemplars, refExemplar{ref, e})
+	a.exemplars = append(a.exemplars, exemplarWithSeriesRef{ref, e})
 	return nil
 }
 

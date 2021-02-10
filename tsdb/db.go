@@ -1505,8 +1505,8 @@ func (db *DB) ChunkQuerier(_ context.Context, mint, maxt int64) (storage.ChunkQu
 	return storage.NewMergeChunkQuerier(blockQueriers, nil, storage.NewCompactingChunkSeriesMerger(storage.ChainedSeriesMerge)), nil
 }
 
-func (db *DB) ExemplarQuerier(_ context.Context) (storage.ExemplarQuerier, error) {
-	return db.head.exemplars, nil
+func (db *DB) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error) {
+	return db.head.exemplars.ExemplarQuerier(ctx)
 }
 
 func rangeForTimestamp(t int64, width int64) (maxt int64) {

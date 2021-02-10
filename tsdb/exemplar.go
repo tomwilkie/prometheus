@@ -15,7 +15,6 @@ package tsdb
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -73,9 +72,10 @@ type circularBufferEntry struct {
 
 // If we assume the average case 95 bytes per exemplar we can fit 5651272 exemplars in
 // 1GB of extra memory, accounting for the fact that this is heap allocated space.
-func NewCircularExemplarStorage(len int, reg prometheus.Registerer) (*CircularExemplarStorage, error) {
+// If len < 1, then the exemplar storage is disabled.
+func NewCircularExemplarStorage(len int, reg prometheus.Registerer) (storage.ExemplarStorage, error) {
 	if len < 1 {
-		return nil, fmt.Errorf("must initialize exemplar storage with space for at least 1 exemplar, %d is invalid", len)
+		return &noopExemplarStorage{}, nil
 	}
 	return &CircularExemplarStorage{
 		exemplars: make([]*circularBufferEntry, len),
@@ -201,4 +201,26 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, e exemplar.Exemp
 func (ce *CircularExemplarStorage) Reset() {
 	ce.exemplars = make([]*circularBufferEntry, len(ce.exemplars))
 	ce.index = make(map[string]*indexEntry)
+}
+
+type noopExemplarStorage struct{}
+
+func (noopExemplarStorage) ExemplarQuerier(context.Context) (storage.ExemplarQuerier, error) {
+	return &noopExemplarQuerier{}, nil
+}
+
+func (noopExemplarStorage) ExemplarAppender() storage.ExemplarAppender {
+	return &noopExemplarAppender{}
+}
+
+type noopExemplarQuerier struct{}
+
+func (noopExemplarQuerier) Select(_, _ int64, _ labels.Labels) ([]exemplar.Exemplar, error) {
+	return nil, nil
+}
+
+type noopExemplarAppender struct{}
+
+func (noopExemplarAppender) AddExemplar(_ labels.Labels, _ exemplar.Exemplar) error {
+	return nil
 }

@@ -67,7 +67,7 @@ type Head struct {
 	metrics       *headMetrics
 	opts          *HeadOptions
 	wal           *wal.WAL
-	exemplars     *CircularExemplarStorage
+	exemplars     storage.ExemplarStorage
 	logger        log.Logger
 	appendPool    sync.Pool
 	exemplarsPool sync.Pool
@@ -332,13 +332,9 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars i
 		opts.SeriesCallback = &noopSeriesLifecycleCallback{}
 	}
 
-	var err error
-	var es *CircularExemplarStorage
-	if numExemplars != 0 {
-		es, err = NewCircularExemplarStorage(numExemplars, r)
-		if err != nil {
-			return nil, err
-		}
+	es, err := NewCircularExemplarStorage(numExemplars, r)
+	if err != nil {
+		return nil, err
 	}
 
 	h := &Head{
@@ -383,7 +379,7 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars i
 func mmappedChunksDir(dir string) string { return filepath.Join(dir, "chunks_head") }
 
 func (h *Head) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error) {
-	return h.exemplars, nil
+	return h.exemplars.ExemplarQuerier(ctx)
 }
 
 func (h *Head) ExemplarStorage() storage.ExemplarStorage {
@@ -1149,6 +1145,7 @@ func (h *Head) appender() *headAppender {
 		exemplars:             h.getExemplarBuffer(),
 		appendID:              appendID,
 		cleanupAppendIDsBelow: cleanupAppendIDsBelow,
+		exemplarAppender:      h.exemplars.ExemplarAppender(),
 	}
 }
 
@@ -1225,9 +1222,10 @@ type refExemplar struct {
 }
 
 type headAppender struct {
-	head         *Head
-	minValidTime int64 // No samples below this timestamp are allowed.
-	mint, maxt   int64
+	head             *Head
+	minValidTime     int64 // No samples below this timestamp are allowed.
+	mint, maxt       int64
+	exemplarAppender storage.ExemplarAppender
 
 	series       []record.RefSeries
 	samples      []record.RefSample
@@ -1417,7 +1415,7 @@ func (a *headAppender) Commit() (err error) {
 	for _, e := range a.exemplars {
 		s := a.head.series.getByID(e.ref)
 		// todo: proper
-		if err := a.head.exemplars.AddExemplar(s.lset, e.exemplar); err != nil {
+		if err := a.exemplarAppender.AddExemplar(s.lset, e.exemplar); err != nil {
 			// todo: do we want to error out here?
 			return errors.Wrap(err, "adding exemplars")
 		}

@@ -69,9 +69,6 @@ type Storage interface {
 type ExemplarStorage interface {
 	ExemplarQueryable
 	ExemplarAppendable
-
-	// Reset clears the exemplar storage, used for tests.
-	Reset()
 }
 
 // A Queryable handles queries against a storage.

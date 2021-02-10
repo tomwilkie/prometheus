@@ -1320,7 +1320,7 @@ loop:
 					}
 					if err := app.AddExemplarFast(ce.ref, e); err != nil {
 						if err != storage.ErrDuplicateExemplar {
-							level.Debug(sl.l).Log("msg", "unexpected error", "error", err, "seriesLabels", ce.lset, "exemplar", e)
+							level.Debug(sl.l).Log("msg", "Unexpected error", "error", err, "seriesLabels", ce.lset, "exemplar", e)
 						}
 					}
 				}
@@ -1354,21 +1354,19 @@ loop:
 			ref, err = app.Add(lset, t, v)
 			sampleAdded, err = sl.checkAddError(nil, met, tp, err, &sampleLimitErr, &appErrs)
 
-			switch err {
-			case nil:
-				// todo: This smells funny.
-				if hasExemplar := p.Exemplar(&e); hasExemplar {
-					if err := app.AddExemplar(lset, e); err != nil {
-						if err != storage.ErrDuplicateExemplar {
-							level.Debug(sl.l).Log("msg", "unexpected error", "error", err, "seriesLabels", lset, "exemplar", e)
-						}
+			if err != nil {
+				if err != storage.ErrNotFound {
+					level.Debug(sl.l).Log("msg", "Unexpected error", "series", string(met), "err", err)
+				}
+				break loop
+			}
+
+			if hasExemplar := p.Exemplar(&e); hasExemplar {
+				if err := eApp.AddExemplar(lset, e); err != nil {
+					if err != storage.ErrDuplicateExemplar {
+						level.Debug(sl.l).Log("msg", "Unexpected error", "error", err, "seriesLabels", lset, "exemplar", e)
 					}
 				}
-			case storage.ErrNotFound:
-				break
-			default:
-				level.Debug(sl.l).Log("msg", "Unexpected error", "series", string(met), "err", err)
-				break loop
 			}
 
 			if tp == nil {

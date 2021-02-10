@@ -787,11 +787,7 @@ func (db *DB) Appender(ctx context.Context) storage.Appender {
 }
 
 func (db *DB) ExemplarAppender() storage.ExemplarAppender {
-	return db.head.Appender(context.TODO())
-}
-
-func (db *DB) Reset() {
-	// noop
+	return db.head.ExemplarAppender(context.TODO())
 }
 
 // dbAppender wraps the DB's head appender and triggers compactions on commit

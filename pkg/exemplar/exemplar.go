@@ -14,11 +14,6 @@
 package exemplar
 
 import (
-	"bytes"
-	"encoding/json"
-	"math"
-	"strconv"
-
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
@@ -48,50 +43,4 @@ func (e Exemplar) Equals(e2 Exemplar) bool {
 	}
 
 	return true
-}
-
-func (e Exemplar) MarshalJSON() ([]byte, error) {
-	var nts bytes.Buffer
-	partial := int(e.Ts / 1000)
-	fraction := int(e.Ts % 1000)
-
-	nts.Write([]byte(strconv.Itoa(partial)))
-	if fraction != 0 {
-		nts.WriteRune('.')
-		if fraction < 100 {
-			nts.WriteRune('0')
-
-		}
-		if fraction < 10 {
-			nts.WriteRune('0')
-		}
-		nts.Write([]byte(strconv.Itoa(fraction)))
-	}
-
-	f, err := strconv.ParseFloat(nts.String(), 64)
-	if err != nil {
-		return nil, err
-	}
-
-	abs := math.Abs(e.Value)
-	fmt := byte('f')
-	// Note: Must use float32 comparisons for underlying float32 value to get precise cutoffs right.
-	if abs != 0 {
-		if abs < 1e-6 || abs >= 1e21 {
-			fmt = 'e'
-		}
-	}
-	nts.Reset()
-	b := nts.Bytes()
-	b = strconv.AppendFloat(b, e.Value, fmt, -1, 64)
-
-	return json.Marshal(&struct {
-		Labels labels.Labels `json:"labels"`
-		Value  string        `json:"value"`
-		Ts     float64       `json:"timestamp"`
-	}{
-		Labels: e.Labels,
-		Value:  string(b),
-		Ts:     f,
-	})
 }

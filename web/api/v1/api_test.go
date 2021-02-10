@@ -2938,6 +2938,36 @@ func TestRespond(t *testing.T) {
 			response: promql.Point{V: 1.2345678e-67, T: 0},
 			expected: `{"status":"success","data":[0,"1.2345678e-67"]}`,
 		},
+		{
+			response: []exemplarData{
+				{
+					SeriesLabels: labels.FromStrings("foo", "bar"),
+					Exemplars: []exemplar.Exemplar{
+						{
+							Labels: labels.FromStrings("traceID", "abc"),
+							Value:  100.123,
+							Ts:     1234,
+						},
+					},
+				},
+			},
+			expected: `{"status":"success","data":[{"seriesLabels":{"foo":"bar"},"exemplars":[{"labels":{"traceID":"abc"},"value":"100.123","timestamp":1.234}]}]}`,
+		},
+		{
+			response: []exemplarData{
+				{
+					SeriesLabels: labels.FromStrings("foo", "bar"),
+					Exemplars: []exemplar.Exemplar{
+						{
+							Labels: labels.FromStrings("traceID", "abc"),
+							Value:  math.Inf(1),
+							Ts:     1234,
+						},
+					},
+				},
+			},
+			expected: `{"status":"success","data":[{"seriesLabels":{"foo":"bar"},"exemplars":[{"labels":{"traceID":"abc"},"value":"+Inf","timestamp":1.234}]}]}`,
+		},
 	}
 
 	for _, c := range cases {

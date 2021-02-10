@@ -206,6 +206,7 @@ type API struct {
 
 func init() {
 	jsoniter.RegisterTypeEncoderFunc("promql.Point", marshalPointJSON, marshalPointJSONIsEmpty)
+	jsoniter.RegisterTypeEncoderFunc("exemplar.Exemplar", marshalExemplarJSON, marshalExemplarJSONEmpty)
 	prometheus.MustRegister(remoteReadQueries)
 }
 
@@ -1823,12 +1824,60 @@ OUTER:
 	return matcherSets, nil
 }
 
+// marshalPointJSON writes `[ts, "val"]`.
 func marshalPointJSON(ptr unsafe.Pointer, stream *jsoniter.Stream) {
 	p := *((*promql.Point)(ptr))
 	stream.WriteArrayStart()
+	marshalTimestamp(p.T, stream)
+	stream.WriteMore()
+	marshalValue(p.V, stream)
+	stream.WriteArrayEnd()
+}
+
+func marshalPointJSONIsEmpty(ptr unsafe.Pointer) bool {
+	return false
+}
+
+// marshalExemplarJSON writes.
+// {
+//    labels: <labels>,
+//    value: "<string>",
+//    timestamp: <float>
+// }
+func marshalExemplarJSON(ptr unsafe.Pointer, stream *jsoniter.Stream) {
+	p := *((*exemplar.Exemplar)(ptr))
+	stream.WriteObjectStart()
+
+	// "labels" key.
+	stream.WriteObjectField(`labels`)
+	lbls, err := p.Labels.MarshalJSON()
+	if err != nil {
+		stream.Error = err
+		return
+	}
+	stream.SetBuffer(append(stream.Buffer(), lbls...))
+
+	// "value" key.
+	stream.WriteMore()
+	stream.WriteObjectField(`value`)
+	marshalValue(p.Value, stream)
+
+	// "timestamp" key.
+	stream.WriteMore()
+	stream.WriteObjectField(`timestamp`)
+	marshalTimestamp(p.Ts, stream)
+	//marshalTimestamp(p.Ts, stream)
+
+	stream.WriteObjectEnd()
+}
+
+func marshalExemplarJSONEmpty(ptr unsafe.Pointer) bool {
+	return false
+}
+
+func marshalTimestamp(t int64, stream *jsoniter.Stream) {
 	// Write out the timestamp as a float divided by 1000.
 	// This is ~3x faster than converting to a float.
-	t := p.T
 	if t < 0 {
 		stream.WriteRaw(`-`)
 		t = -t
@@ -1845,13 +1894,14 @@ func marshalPointJSON(ptr unsafe.Pointer, stream *jsoniter.Stream) {
 		}
 		stream.WriteInt64(fraction)
 	}
-	stream.WriteMore()
-	stream.WriteRaw(`"`)
+}
 
+func marshalValue(v float64, stream *jsoniter.Stream) {
+	stream.WriteRaw(`"`)
 	// Taken from https://github.com/json-iterator/go/blob/master/stream_float.go#L71 as a workaround
 	// to https://github.com/json-iterator/go/issues/365 (jsoniter, to follow json standard, doesn't allow inf/nan).
 	buf := stream.Buffer()
-	abs := math.Abs(p.V)
+	abs := math.Abs(v)
 	fmt := byte('f')
 	// Note: Must use float32 comparisons for underlying float32 value to get precise cutoffs right.
 	if abs != 0 {
@@ -1859,13 +1909,7 @@ func marshalPointJSON(ptr unsafe.Pointer, stream *jsoniter.Stream) {
 			fmt = 'e'
 		}
 	}
-	buf = strconv.AppendFloat(buf, p.V, fmt, -1, 64)
+	buf = strconv.AppendFloat(buf, v, fmt, -1, 64)
 	stream.SetBuffer(buf)
-
 	stream.WriteRaw(`"`)
-	stream.WriteArrayEnd()
-}
-
-func marshalPointJSONIsEmpty(ptr unsafe.Pointer) bool {
-	return false
 }

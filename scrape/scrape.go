@@ -1362,7 +1362,7 @@ loop:
 			}
 
 			if hasExemplar := p.Exemplar(&e); hasExemplar {
-				if err := eApp.AddExemplar(lset, e); err != nil {
+				if err := app.AddExemplar(lset, e); err != nil {
 					if err != storage.ErrDuplicateExemplar {
 						level.Debug(sl.l).Log("msg", "Unexpected error", "error", err, "seriesLabels", lset, "exemplar", e)
 					}

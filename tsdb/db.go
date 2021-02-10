@@ -786,10 +786,6 @@ func (db *DB) Appender(ctx context.Context) storage.Appender {
 	return dbAppender{db: db, Appender: db.head.Appender(ctx)}
 }
 
-func (db *DB) ExemplarAppender() storage.ExemplarAppender {
-	return db.head.ExemplarAppender(context.TODO())
-}
-
 // dbAppender wraps the DB's head appender and triggers compactions on commit
 // if necessary.
 type dbAppender struct {

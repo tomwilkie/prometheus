@@ -514,11 +514,37 @@ func (api *API) queryExemplars(r *http.Request) apiFuncResult {
 	}
 
 	mint, maxt := api.QueryEngine.FindMinMaxTime(&parser.EvalStmt{Expr: expr, Start: start, End: end, Interval: 15 * time.Second})
-	q, err := api.Queryable.Querier(ctx, mint, maxt)
-	if err != nil {
-		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
+
+	queryExemplarsFor := func(selector []*labels.Matcher) ([]exemplarData, *apiError) {
+		q, err := api.Queryable.Querier(ctx, mint, maxt)
+		if err != nil {
+			return nil, &apiError{errorBadData, err}
+		}
+		defer q.Close()
+
+		s := q.Select(false, nil, selector...)
+		eq, err := api.ExemplarQueryable.ExemplarQuerier(ctx)
+		if err != nil {
+			return nil, &apiError{errorBadData, err}
+		}
+
+		var retExemplars []exemplarData
+		for s.Next() {
+			res, err := eq.Select(timestamp.FromTime(start), timestamp.FromTime(end), s.At().Labels())
+			if err != nil {
+				return nil, &apiError{errorBadData, err}
+			}
+			if len(res) == 0 {
+				continue
+			}
+			retExemplars = append(retExemplars, exemplarData{SeriesLabels: s.At().Labels(), Exemplars: res})
+		}
+		if err := s.Err(); err != nil {
+			return nil, &apiError{errorExec, err}
+		}
+
+		return retExemplars, nil
 	}
-	defer q.Close()
 
 	selectors, err := parser.ExtractSelectors(expr)
 	if err != nil {
@@ -529,26 +555,12 @@ func (api *API) queryExemplars(r *http.Request) apiFuncResult {
 	}
 
 	var retExemplars []exemplarData
-	for _, selectorArr := range selectors {
-		s := q.Select(false, nil, selectorArr...)
-		eq, err := api.ExemplarQueryable.ExemplarQuerier(r.Context())
+	for _, selector := range selectors {
+		exemplars, err := queryExemplarsFor(selector)
 		if err != nil {
-			return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
+			return apiFuncResult{nil, err, nil, nil}
 		}
-
-		for s.Next() {
-			res, err := eq.Select(timestamp.FromTime(start), timestamp.FromTime(end), s.At().Labels())
-			if err != nil {
-				return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
-			}
-			if len(res) == 0 {
-				continue
-			}
-			retExemplars = append(retExemplars, exemplarData{SeriesLabels: s.At().Labels(), Exemplars: res})
-		}
-		if err := s.Err(); err != nil {
-			return apiFuncResult{nil, &apiError{errorExec, err}, nil, nil}
-		}
+		retExemplars = append(retExemplars, exemplars...)
 	}
 
 	return apiFuncResult{retExemplars, nil, nil, nil}

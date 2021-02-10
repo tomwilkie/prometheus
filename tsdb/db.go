@@ -339,7 +339,7 @@ func (db *DBReadOnly) FlushWAL(dir string) (returnErr error) {
 	}
 	opts := DefaultHeadOptions()
 	opts.ChunkDirRoot = db.dir
-	head, err := NewHead(nil, db.logger, w, 0, opts)
+	head, err := NewHead(nil, db.logger, w, opts)
 	if err != nil {
 		return err
 	}
@@ -394,7 +394,7 @@ func (db *DBReadOnly) loadDataAsQueryable(maxt int64) (storage.SampleAndChunkQue
 
 	opts := DefaultHeadOptions()
 	opts.ChunkDirRoot = db.dir
-	head, err := NewHead(nil, db.logger, nil, 0, opts)
+	head, err := NewHead(nil, db.logger, nil, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +414,7 @@ func (db *DBReadOnly) loadDataAsQueryable(maxt int64) (storage.SampleAndChunkQue
 		}
 		opts := DefaultHeadOptions()
 		opts.ChunkDirRoot = db.dir
-		head, err = NewHead(nil, db.logger, w, 0, opts)
+		head, err = NewHead(nil, db.logger, w, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -666,7 +666,8 @@ func open(dir string, l log.Logger, r prometheus.Registerer, opts *Options, rngs
 	headOpts.ChunkWriteBufferSize = opts.HeadChunksWriteBufferSize
 	headOpts.StripeSize = opts.StripeSize
 	headOpts.SeriesCallback = opts.SeriesLifecycleCallback
-	db.head, err = NewHead(r, l, wlog, opts.MaxExemplars, headOpts)
+	headOpts.NumExemplars = opts.MaxExemplars
+	db.head, err = NewHead(r, l, wlog, headOpts)
 	if err != nil {
 		return nil, err
 	}

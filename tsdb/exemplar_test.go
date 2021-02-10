@@ -25,8 +25,9 @@ import (
 )
 
 func TestAddExemplar(t *testing.T) {
-	es, err := NewCircularExemplarStorage(2, nil)
+	exs, err := NewCircularExemplarStorage(2, nil)
 	require.NoError(t, err)
+	es := exs.(*CircularExemplarStorage)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -83,8 +84,9 @@ func TestAddExtraExemplar(t *testing.T) {
 	// Test that circular buffer index and assignment
 	// works properly, adding more exemplars than can
 	// be stored and then querying for them.
-	es, err := NewCircularExemplarStorage(5, nil)
+	exs, err := NewCircularExemplarStorage(5, nil)
 	require.NoError(t, err)
+	es := exs.(*CircularExemplarStorage)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -114,8 +116,9 @@ func TestAddExtraExemplar(t *testing.T) {
 }
 
 func TestSelectExemplar(t *testing.T) {
-	es, err := NewCircularExemplarStorage(5, nil)
+	exs, err := NewCircularExemplarStorage(5, nil)
 	require.NoError(t, err)
+	es := exs.(*CircularExemplarStorage)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -129,7 +132,6 @@ func TestSelectExemplar(t *testing.T) {
 		},
 		Value: 0.1,
 		Ts:    12,
-		HasTs: true,
 	}
 
 	es.AddExemplar(l, e)
@@ -143,8 +145,9 @@ func TestSelectExemplar(t *testing.T) {
 }
 
 func TestSelectExemplar_MultiSeries(t *testing.T) {
-	es, err := NewCircularExemplarStorage(5, nil)
+	exs, err := NewCircularExemplarStorage(5, nil)
 	require.NoError(t, err)
+	es := exs.(*CircularExemplarStorage)
 
 	l1 := labels.Labels{
 		{Name: "__name__", Value: "test_metric"},
@@ -193,8 +196,9 @@ func TestSelectExemplar_MultiSeries(t *testing.T) {
 }
 
 func TestSelectExemplar_TimeRange(t *testing.T) {
-	es, err := NewCircularExemplarStorage(4, nil)
+	exs, err := NewCircularExemplarStorage(4, nil)
 	require.NoError(t, err)
+	es := exs.(*CircularExemplarStorage)
 
 	l := labels.Labels{
 		{Name: "service", Value: "asdf"},
@@ -255,8 +259,9 @@ func TestSelectExemplar_TimeRange(t *testing.T) {
 }
 
 func TestIndexOverwrite(t *testing.T) {
-	es, err := NewCircularExemplarStorage(2, nil)
+	exs, err := NewCircularExemplarStorage(2, nil)
 	require.NoError(t, err)
+	es := exs.(*CircularExemplarStorage)
 
 	l1 := labels.Labels{
 		{Name: "service", Value: "asdf"},

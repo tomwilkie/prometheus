@@ -113,6 +113,7 @@ type HeadOptions struct {
 	// A smaller StripeSize reduces the memory allocated, but can decrease performance with large number of series.
 	StripeSize     int
 	SeriesCallback SeriesLifecycleCallback
+	NumExemplars   int
 }
 
 func DefaultHeadOptions() *HeadOptions {
@@ -321,7 +322,7 @@ func (h *Head) PostingsCardinalityStats(statsByLabelName string) *index.Postings
 }
 
 // NewHead opens the head block in dir.
-func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars int, opts *HeadOptions) (*Head, error) {
+func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, opts *HeadOptions) (*Head, error) {
 	if l == nil {
 		l = log.NewNopLogger()
 	}
@@ -332,7 +333,7 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal *wal.WAL, numExemplars i
 		opts.SeriesCallback = &noopSeriesLifecycleCallback{}
 	}
 
-	es, err := NewCircularExemplarStorage(numExemplars, r)
+	es, err := NewCircularExemplarStorage(opts.NumExemplars, r)
 	if err != nil {
 		return nil, err
 	}
@@ -1341,27 +1342,8 @@ func (a *headAppender) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
 
 	s := a.head.series.getByID(ref)
 	if s == nil {
-		return errors.Wrap(storage.ErrNotFound, "unknown series")
+		return storage.ErrNotFound
 	}
-
-	// todo: fix timestamp checks
-	// s.Lock()
-	// if err := s.appendable(e.Ts, e.V); err != nil {
-	// 	s.Unlock()
-	// 	if err == storage.ErrOutOfOrderSample {
-	// 		a.head.metrics.outOfOrderSamples.Inc()
-	// 	}
-	// 	return err
-	// }
-	// s.pendingCommit = true
-	// s.Unlock()
-
-	// if t < a.mint {
-	// 	a.mint = t
-	// }
-	// if t > a.maxt {
-	// 	a.maxt = t
-	// }
 
 	a.exemplars = append(a.exemplars, exemplarWithSeriesRef{ref, e})
 	return nil

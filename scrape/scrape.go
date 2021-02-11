@@ -1322,7 +1322,7 @@ loop:
 				if !e.HasTs {
 					e.Ts = t
 				}
-				if err = app.AddExemplarFast(ce.ref, e); err != nil && err != storage.ErrDuplicateExemplar {
+				if err = app.AddExemplarFast(ce.ref, e); err != nil {
 					break loop
 				}
 			// In theory this should never happen.
@@ -1374,7 +1374,7 @@ loop:
 				if !e.HasTs {
 					e.Ts = t
 				}
-				if err = app.AddExemplar(lset, e); err != nil && err != storage.ErrDuplicateExemplar {
+				if err = app.AddExemplar(lset, e); err != nil {
 					break loop
 				}
 			}

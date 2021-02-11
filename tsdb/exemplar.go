@@ -25,7 +25,6 @@ import (
 
 type exemplarMetrics struct {
 	outOfOrderExemplars prometheus.Counter
-	duplicateExemplars  prometheus.Counter
 }
 
 func newExemplarMetrics(r prometheus.Registerer) *exemplarMetrics {
@@ -34,15 +33,10 @@ func newExemplarMetrics(r prometheus.Registerer) *exemplarMetrics {
 			Name: "prometheus_exemplar_out_of_order_exemplars_total",
 			Help: "Total number of out of order samples ingestion failed attempts",
 		}),
-		duplicateExemplars: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "prometheus_exemplar_duplicate_exemplars_total",
-			Help: "Total number of series in the head block.",
-		}),
 	}
 	if r != nil {
 		r.MustRegister(
 			m.outOfOrderExemplars,
-			m.duplicateExemplars,
 		)
 	}
 	return m
@@ -175,9 +169,9 @@ func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, e exemplar.Exemp
 	}
 
 	// Check for duplicate vs last stored exemplar for this series.
+	// NB these are expected, add appending them is a no-op.
 	if ce.exemplars[idx.last].exemplar.Equals(e) {
-		ce.metrics.duplicateExemplars.Inc()
-		return storage.ErrDuplicateExemplar
+		return nil
 	}
 
 	if e.Ts <= ce.exemplars[idx.last].exemplar.Ts {

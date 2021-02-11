@@ -64,20 +64,17 @@ func TestAddExemplar(t *testing.T) {
 	require.True(t, es.exemplars[es.index[l.String()].last].exemplar.Equals(e2), "exemplar was not stored correctly, expected %+v got: %+v", e2, es.exemplars[es.index[l.String()].last].exemplar)
 
 	err = es.AddExemplar(l, e2)
-	require.Error(t, err, "no error when attempting to add duplicate exemplar")
-	require.True(t, err == storage.ErrDuplicateExemplar, "duplicate exemplar was added")
+	require.NoError(t, err, "no error is expected attempting to add duplicate exemplar")
 
 	e3 := e2
 	e3.Ts = 3
 	err = es.AddExemplar(l, e3)
-	require.Error(t, err, "no error when attempting to add duplicate exemplar")
-	require.True(t, err == storage.ErrDuplicateExemplar, "duplicate exemplar was added")
+	require.NoError(t, err, "no error is expected when attempting to add duplicate exemplar, even with different timestamp")
 
 	e3.Ts = 1
 	e3.Value = 0.3
 	err = es.AddExemplar(l, e3)
-	require.Error(t, err, "no error when attempting to add out of order exemplar")
-	require.True(t, err == storage.ErrOutOfOrderExemplar, "out of order exemplar was added")
+	require.Equal(t, err, storage.ErrOutOfOrderExemplar)
 }
 
 func TestAddExtraExemplar(t *testing.T) {

@@ -1536,7 +1536,7 @@ func TestScrapeLoopAppendExemplar(t *testing.T) {
 			expValue:        0,
 			hasExemplars:    true,
 			exemplar: []exemplar.Exemplar{
-				{Labels: labels.FromStrings("a", "abc"), Value: 1, Ts: 10000000},
+				{Labels: labels.FromStrings("a", "abc"), Value: 1, Ts: 10000000, HasTs: true},
 			},
 		},
 	}

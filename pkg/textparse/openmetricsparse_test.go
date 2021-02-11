@@ -158,7 +158,7 @@ foo_total 17.0 1520879607.789 # {xx="yy"} 5`
 			m:    `ggh_bucket{le="+Inf"}`,
 			v:    1,
 			lset: labels.FromStrings("__name__", "ggh_bucket", "le", "+Inf"),
-			e:    &exemplar.Exemplar{Labels: labels.FromStrings("cc", "dd", "xx", "yy"), Value: 4, Ts: 123123},
+			e:    &exemplar.Exemplar{Labels: labels.FromStrings("cc", "dd", "xx", "yy"), Value: 4, HasTs: true, Ts: 123123},
 		}, {
 			m:   "ii",
 			typ: MetricTypeInfo,
@@ -229,9 +229,9 @@ foo_total 17.0 1520879607.789 # {xx="yy"} 5`
 
 			var e exemplar.Exemplar
 			p.Metric(&res)
-			found, hasTs := p.Exemplar(&e)
+			found := p.Exemplar(&e)
 			require.Equal(t, exp[i].m, string(m))
-			if hasTs {
+			if e.HasTs {
 				require.Equal(t, exp[i].t, ts)
 			}
 			require.Equal(t, exp[i].v, v)

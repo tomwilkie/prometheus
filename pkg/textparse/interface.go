@@ -53,8 +53,7 @@ type Parser interface {
 
 	// Exemplar writes the exemplar of the current sample into the passed
 	// exemplar. It returns if an exemplar exists or not.
-	// The second boolean returned is true if the exemplar has a timestamp.
-	Exemplar(l *exemplar.Exemplar) (bool, bool)
+	Exemplar(l *exemplar.Exemplar) bool
 
 	// Next advances the parser to the next sample. It returns false if no
 	// more samples were read or an error occurred.

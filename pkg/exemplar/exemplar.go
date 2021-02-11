@@ -21,6 +21,7 @@ import (
 type Exemplar struct {
 	Labels labels.Labels
 	Value  float64
+	HasTs  bool
 	Ts     int64
 }
 
@@ -34,7 +35,7 @@ func (e Exemplar) Equals(e2 Exemplar) bool {
 		return false
 	}
 
-	if e.Ts != e2.Ts {
+	if (e.HasTs || e2.HasTs) && e.Ts != e2.Ts {
 		return false
 	}
 

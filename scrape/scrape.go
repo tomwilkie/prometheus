@@ -1315,11 +1315,11 @@ loop:
 			switch err {
 			case nil:
 				// If the appending of sample errored, no point in trying for exemplars.
-				hasExemplar, hasTimestamp := p.Exemplar(&e)
+				hasExemplar := p.Exemplar(&e)
 				if !hasExemplar {
 					break
 				}
-				if !hasTimestamp {
+				if !e.HasTs {
 					e.Ts = t
 				}
 				if err = app.AddExemplarFast(ce.ref, e); err != nil && err != storage.ErrDuplicateExemplar {
@@ -1370,8 +1370,8 @@ loop:
 				seriesAdded++
 			}
 
-			if hasExemplar, hasTimestamp := p.Exemplar(&e); hasExemplar {
-				if !hasTimestamp {
+			if hasExemplar := p.Exemplar(&e); hasExemplar {
+				if !e.HasTs {
 					e.Ts = t
 				}
 				if err = app.AddExemplar(lset, e); err != nil && err != storage.ErrDuplicateExemplar {

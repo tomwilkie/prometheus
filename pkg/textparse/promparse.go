@@ -237,8 +237,8 @@ func (p *PromParser) Metric(l *labels.Labels) string {
 
 // Exemplar writes the exemplar of the current sample into the passed
 // exemplar. It returns if an exemplar exists.
-func (p *PromParser) Exemplar(e *exemplar.Exemplar) (bool, bool) {
-	return false, false
+func (p *PromParser) Exemplar(e *exemplar.Exemplar) bool {
+	return false
 }
 
 // nextToken returns the next token from the promlexer. It skips over tabs

@@ -1312,22 +1312,20 @@ loop:
 		if ok {
 			err = app.AddFast(ce.ref, t, v)
 			_, err = sl.checkAddError(ce, met, tp, err, &sampleLimitErr, &appErrs)
-			switch err {
-			case nil:
-				// If the appending of sample errored, no point in trying for exemplars.
-				hasExemplar := p.Exemplar(&e)
-				if !hasExemplar {
-					break
-				}
+			// In theory this should never happen.
+			if err == storage.ErrNotFound {
+				ok = false
+			}
+
+			// If the appending of sample errored, no point in trying for exemplars.
+			if hasExemplar := p.Exemplar(&e); ok && hasExemplar {
 				if !e.HasTs {
 					e.Ts = t
 				}
-				if err = app.AddExemplarFast(ce.ref, e); err != nil {
-					break loop
+				err = app.AddExemplarFast(ce.ref, e)
+				if err == storage.ErrNotFound {
+					ok = false
 				}
-			// In theory this should never happen.
-			case storage.ErrNotFound:
-				ok = false
 			}
 		}
 		if !ok {

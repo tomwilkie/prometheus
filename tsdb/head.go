@@ -1304,10 +1304,6 @@ func (a *headAppender) AddFast(ref uint64, t int64, v float64) error {
 }
 
 func (a *headAppender) AddExemplar(lset labels.Labels, e exemplar.Exemplar) error {
-	if e.Ts < a.minValidTime {
-		return storage.ErrOutOfBounds
-	}
-
 	// Ensure no empty labels have gotten through.
 	lset = lset.WithoutEmpty()
 
@@ -1335,11 +1331,6 @@ func (a *headAppender) AddExemplar(lset labels.Labels, e exemplar.Exemplar) erro
 }
 
 func (a *headAppender) AddExemplarFast(ref uint64, e exemplar.Exemplar) error {
-	if e.Ts < a.minValidTime {
-		// todo metric for exemplar out of bounds? or use sample out of bounds?
-		return storage.ErrOutOfBounds
-	}
-
 	s := a.head.series.getByID(ref)
 	if s == nil {
 		return storage.ErrNotFound

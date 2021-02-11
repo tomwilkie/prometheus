@@ -15,7 +15,6 @@ package tsdb
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -157,7 +156,6 @@ func (ce *CircularExemplarStorage) indexGc(cbe *circularBufferEntry) {
 }
 
 func (ce *CircularExemplarStorage) AddExemplar(l labels.Labels, e exemplar.Exemplar) error {
-	fmt.Println("adding exemplar: ", e)
 	seriesLabels := l.String()
 	ce.lock.Lock()
 	defer ce.lock.Unlock()

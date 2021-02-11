@@ -1503,84 +1503,102 @@ func TestScrapeLoopAppendNoStalenessIfTimestamp(t *testing.T) {
 func TestScrapeLoopAppendExemplar(t *testing.T) {
 	tests := []struct {
 		title           string
-		scrapeLabels    string
+		scrapeText      string
 		discoveryLabels []string
-		expLset         labels.Labels
-		expValue        float64
-		hasExemplars    bool
-		exemplar        []exemplar.Exemplar
+		samples         []sample
+		exemplars       []exemplar.Exemplar
 	}{
 		{
 			title:           "Metric without exemplars",
-			scrapeLabels:    "metric_total{n=\"1\"} 0\n# EOF",
+			scrapeText:      "metric_total{n=\"1\"} 0\n# EOF",
 			discoveryLabels: []string{"n", "2"},
-			expLset:         labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
-			expValue:        0,
-			exemplar:        []exemplar.Exemplar{},
+			samples: []sample{{
+				metric: labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
+				v:      0,
+			}},
 		},
 		{
 			title:           "Metric with exemplars",
-			scrapeLabels:    "metric_total{n=\"1\"} 0 # {a=\"abc\"} 1.0\n# EOF",
+			scrapeText:      "metric_total{n=\"1\"} 0 # {a=\"abc\"} 1.0\n# EOF",
 			discoveryLabels: []string{"n", "2"},
-			expLset:         labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
-			expValue:        0,
-			hasExemplars:    true,
-			exemplar: []exemplar.Exemplar{
+			samples: []sample{{
+				metric: labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
+				v:      0,
+			}},
+			exemplars: []exemplar.Exemplar{
 				{Labels: labels.FromStrings("a", "abc"), Value: 1},
 			},
 		}, {
 			title:           "Metric with exemplars and TS",
-			scrapeLabels:    "metric_total{n=\"1\"} 0 # {a=\"abc\"} 1.0 10000\n# EOF",
+			scrapeText:      "metric_total{n=\"1\"} 0 # {a=\"abc\"} 1.0 10000\n# EOF",
 			discoveryLabels: []string{"n", "2"},
-			expLset:         labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
-			expValue:        0,
-			hasExemplars:    true,
-			exemplar: []exemplar.Exemplar{
+			samples: []sample{{
+				metric: labels.FromStrings("__name__", "metric_total", "exported_n", "1", "n", "2"),
+				v:      0,
+			}},
+			exemplars: []exemplar.Exemplar{
 				{Labels: labels.FromStrings("a", "abc"), Value: 1, Ts: 10000000, HasTs: true},
+			},
+		}, {
+			title: "Two metrics and exemplars",
+			scrapeText: `metric_total{n="1"} 1 # {t="1"} 1.0 10000
+metric_total{n="2"} 2 # {t="2"} 2.0 20000
+# EOF`,
+			samples: []sample{{
+				metric: labels.FromStrings("__name__", "metric_total", "n", "1"),
+				v:      1,
+			}, {
+				metric: labels.FromStrings("__name__", "metric_total", "n", "2"),
+				v:      2,
+			}},
+			exemplars: []exemplar.Exemplar{
+				{Labels: labels.FromStrings("t", "1"), Value: 1, Ts: 10000000, HasTs: true},
+				{Labels: labels.FromStrings("t", "2"), Value: 2, Ts: 20000000, HasTs: true},
 			},
 		},
 	}
 
 	for _, test := range tests {
-		app := &collectResultAppender{}
+		t.Run(test.title, func(t *testing.T) {
+			app := &collectResultAppender{}
 
-		discoveryLabels := &Target{
-			labels: labels.FromStrings(test.discoveryLabels...),
-		}
+			discoveryLabels := &Target{
+				labels: labels.FromStrings(test.discoveryLabels...),
+			}
 
-		sl := newScrapeLoop(context.Background(),
-			nil, nil, nil,
-			func(l labels.Labels) labels.Labels {
-				return mutateSampleLabels(l, discoveryLabels, false, nil)
-			},
-			func(l labels.Labels) labels.Labels {
-				return mutateReportSampleLabels(l, discoveryLabels)
-			},
-			func(ctx context.Context) storage.Appender { return app },
-			nil,
-			0,
-			true,
-		)
+			sl := newScrapeLoop(context.Background(),
+				nil, nil, nil,
+				func(l labels.Labels) labels.Labels {
+					return mutateSampleLabels(l, discoveryLabels, false, nil)
+				},
+				func(l labels.Labels) labels.Labels {
+					return mutateReportSampleLabels(l, discoveryLabels)
+				},
+				func(ctx context.Context) storage.Appender { return app },
+				nil,
+				0,
+				true,
+			)
 
-		now := time.Now()
+			now := time.Now()
 
-		// We need to set the timestamp for exp exemplars that does not have a timestamp.
-		if test.hasExemplars {
-			for i := range test.exemplar {
-				if test.exemplar[i].Ts == 0 {
-					test.exemplar[i].Ts = timestamp.FromTime(now)
+			for i := range test.samples {
+				test.samples[i].t = timestamp.FromTime(now)
+			}
+
+			// We need to set the timestamp for expected exemplars that does not have a timestamp.
+			for i := range test.exemplars {
+				if test.exemplars[i].Ts == 0 {
+					test.exemplars[i].Ts = timestamp.FromTime(now)
 				}
 			}
-		}
 
-		_, _, _, err := sl.append(app, []byte(test.scrapeLabels), "application/openmetrics-text", now)
-		require.NoError(t, err)
-		require.NoError(t, app.Commit())
-
-		require.Equal(t, len(test.exemplar), len(app.resultExemplars), "Appended exemplars length not as expected")
-		if len(test.exemplar) != 0 {
-			require.Equal(t, test.exemplar, app.resultExemplars, "Appended exemplars not as expected")
-		}
+			_, _, _, err := sl.append(app, []byte(test.scrapeText), "application/openmetrics-text", now)
+			require.NoError(t, err)
+			require.NoError(t, app.Commit())
+			require.Equal(t, test.samples, app.result)
+			require.Equal(t, test.exemplars, app.resultExemplars)
+		})
 	}
 }
 
